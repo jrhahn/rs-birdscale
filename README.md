@@ -280,6 +280,11 @@ probe — is in [FLASHING.md](FLASHING.md).**
 [docs/wiring.md](docs/wiring.md).** The pin map above is the summary; that page
 is what you build from.
 
+**What is actually built, and what still needs doing to it, is in
+[docs/commissioning.md](docs/commissioning.md).** A slot being enabled says a
+sensor is expected, not that one is soldered on — that page is where the
+difference is recorded.
+
 ## Wi-Fi credentials without a rebuild
 
 A board that cannot join the network cannot be told anything over the network,
