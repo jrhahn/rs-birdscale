@@ -46,23 +46,71 @@ Replaced the node formerly called `draussen`. It carries the bird-feeder scale.
   cell fitted. That is the check worth doing before connecting a LiPo: it
   proves the divider is wired and scaled while nothing is at stake.
 
+**Verified on hardware 2026-09-06:**
+
+- **The cell is connected and the node runs on it.** With USB unplugged it
+  keeps publishing, `battery_voltage` included, which is the only proof that
+  matters — the divider sits on the rail the charger drives, so a reading near
+  4.1 V with USB attached is indistinguishable from the 4.11 V measured above
+  with no cell at all.
+- **It charges.** 3.80 V before a short USB session, 3.93 V after.
+
+### The socket is wired with the colours crossed, and that is correct
+
+On this pigtail, **black goes to `B+` and red to `B−`.**
+
+That looks wrong and is not. The JST-PH housing is keyed, so the cell's plug
+mates one way only; what is *not* standardised is which contact of the housing
+carries positive. This pigtail was made with the opposite convention from the
+cell's plug, so matching the colours at the solder joints would have mated them
+backwards. **Decide this by continuity and a voltmeter, never by wire colour** —
+probe which socket contact reaches `B+`, then check the cell's plug puts red on
+that contact.
+
+### A reversed cell reads exactly like a broken divider
+
+It was mated backwards the first time. Nothing was damaged and the cell stayed
+cold, but the failure was thoroughly misleading and cost an evening:
+
+1. The 1S protection board **latched off**. `P+`/`P−` collapsed to 1.2 V while
+   the cell's own terminals still held 3.8 V.
+2. The divider sits on the *protected* rail by design (see the module note in
+   [`src/battery.rs`](../src/battery.rs)), so it measured that dead rail and
+   reported **exactly 0 mV** — tripping the firmware's "no cell at all — check
+   the divider is fitted" warning.
+3. The board went on running the whole time, because it was on USB.
+
+So the symptom was a firmware message naming the divider, on a node that was
+otherwise healthy, with an intact divider. **0 mV does not distinguish "divider
+open" from "protected rail dead."** The signature that separates them is
+measuring the two rails against each other: **3.8 V at the cell, 1.2 V at
+`P+`** can only be the protection board.
+
+Recovery needed no soldering: plugging in USB applies the charger's voltage
+across `P+`, which is the ordinary way to unlatch a DW01A-class board. It went
+1.2 V → 4.1 V and has behaved since. The protection did its job — it shut off
+instead of dying.
+
 **Not done:**
 
-- **The cell is not connected.** A connector is fitted on `B+`/`B-`. JST-PH
-  polarity is not standardised between vendors, so measure the socket against
-  the cell's plug before the first mate — the 1S protection board guards
-  against over-discharge, over-charge and over-current, *not* against reverse
-  polarity.
 - **Not calibrated.** `offset` is the factory default, so weight publishes as
   roughly -20 kg. Calibration is `tare` on an empty, mounted pan and then
   `scale_factor` against a known mass, both over the Home Assistant knobs, no
   reflash. It waits on the enclosure.
-- **`deep_sleep = 0` is still set retained on the broker.** Convenient for
-  calibration — the node stays awake and answers immediately instead of on a
-  ~14 minute cycle — but it must go back to `1` before the node runs on the
-  cell, or the battery is flat within a day or two.
 
-**Two things that cost an evening, so that they do not cost another one:**
+**Open question — the runtime config path is not fully trustworthy:**
+
+`deep_sleep = 0` sat retained on the broker for days and **never took effect**:
+the node kept its 2 s poll cycle throughout. `heartbeat_interval = 60`, set the
+same way on the same path, clearly *did* — the publish cadence was ~78–90 s
+instead of the ~14 minutes a 600 s heartbeat gives. Both are back to their
+defaults now (`600` / `1`).
+
+Worth understanding before relying on that path, because **`tare` and
+`scale_factor` go through the same code** and the calibration above depends on
+them landing.
+
+**Three things that cost an evening, so that they do not cost another one:**
 
 - **The tare baseline lives in RTC RAM** and is taken on the first boot after a
   power cycle. The beam has to be left completely alone for that boot. Taring
@@ -70,11 +118,21 @@ Replaced the node formerly called `draussen`. It carries the bird-feeder scale.
   far outside the drift band and far below the threshold, so every poll landed
   in `Decision::Unexplained` and the baseline was, correctly, never absorbed.
   There is no way out of that except another power cycle.
-- **A battery node's USB port does not enumerate** while it polls: the wake
-  window is shorter than enumeration takes. Flashing one needs the boot window
-  right after plugging in, or the BOOT/RESET hold. Its serial log is not a
-  reliable witness either — see the `espflash monitor` warning in
+- **A battery node's USB port enumerates only in flashes.** The earlier note
+  here said it does not enumerate at all; that was wrong. It appears for a
+  fraction of each 2 s poll cycle. Polling `/dev/ttyACM*` every **20 ms** and
+  reading it passively catches whole log lines, including the heartbeat window
+  where Wi-Fi comes up; polling every 200 ms mostly misses. Verified
+  2026-09-06. Flashing still needs the boot window right after plugging in, or
+  the BOOT/RESET hold, and `espflash monitor` is still the wrong tool — see
   [`FLASHING.md`](../FLASHING.md).
+- **Discovery is announced once per *power cycle*, not per boot.**
+  `FLAG_DISCOVERY` lives in RTC RAM, which survives deep sleep and even a
+  reflash. After the retained `homeassistant/` topics were cleared by hand the
+  node never re-announced, and its entities were simply missing while its
+  readings kept arriving. Pulling power restored all nine. `state.rs` says it
+  outright: *"to force a re-announce you have to pull power, not just flash and
+  reset."*
 
 ---
 
