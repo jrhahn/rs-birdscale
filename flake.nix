@@ -32,6 +32,26 @@
           file = ./rust-toolchain.toml;
           sha256 = "sha256-s1RPtyvDGJaX/BisLT+ifVfuhDT1nZkZ1NcK8sbwELM=";
         };
+
+        # CadQuery is not in nixpkgs -- only the `opencascade-occt` kernel is,
+        # without the Python bindings. So the enclosure shell pins the wheels
+        # instead and installs them into a venv on first entry. The wheels are
+        # manylinux builds, which do not find a loader on NixOS by themselves;
+        # `cadLibs` is what they link against.
+        cadPython = pkgs.python311;
+        cadLibs = pkgs.lib.makeLibraryPath (with pkgs; [
+          stdenv.cc.cc.lib # libstdc++, the one OCP actually fails without
+          expat
+          zlib
+          libGL
+          glib
+          fontconfig
+          freetype
+          libx11
+          libxext
+          libxrender
+        ]);
+        cadVenv = ".venv-cad";
       in
       {
         devShells.default = pkgs.mkShell {
@@ -48,6 +68,35 @@
             if [ -d .git ]; then
               git config --local core.hooksPath .githooks
             fi
+          '';
+        };
+
+        # Enclosure CAD. Separate from the firmware shell because it drags in
+        # a few hundred MB of OpenCASCADE that a `cargo build` has no use for.
+        #
+        #   nix develop .#cad          # or `use flake .#cad` in .envrc
+        #   python models.py           # writes cad-models/*.stl and *.step
+        devShells.cad = pkgs.mkShell {
+          packages = [ cadPython pkgs.gitleaks ];
+
+          # The wheels are manylinux, so they need to be told where the
+          # system libraries live -- see `cadLibs` above.
+          LD_LIBRARY_PATH = cadLibs;
+
+          shellHook = ''
+            if [ -d .git ]; then
+              git config --local core.hooksPath .githooks
+            fi
+            if [ ! -x "${cadVenv}/bin/python" ]; then
+              echo "creating ${cadVenv} (one-off, pulls ~500 MB of OpenCASCADE)..."
+              ${cadPython}/bin/python -m venv "${cadVenv}"
+              "${cadVenv}/bin/pip" install --quiet --upgrade pip
+              # Pinned: CadQuery moves its API around between minor releases,
+              # and models.py is written against this one.
+              "${cadVenv}/bin/pip" install --quiet \
+                'cadquery==2.8.0' 'cadquery-ocp==7.9.3.1.1' 'numpy>=2.0'
+            fi
+            export PATH="$PWD/${cadVenv}/bin:$PATH"
           '';
         };
       });

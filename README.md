@@ -204,6 +204,55 @@ multimeter disagrees. Published to `smarthome/terrasse/battery_voltage` in volts
 3.0 V the log says so: the common DW01A-class protection board does not cut off
 until ~2.4 V, far past where a LiPo starts losing capacity for good.
 
+## Enclosure
+
+[`models.py`](models.py) is the CadQuery source for the printed parts. The
+bending-beam clamps were there first; the `terrasse` housing is new.
+
+```bash
+nix develop .#cad        # separate shell: OpenCASCADE is ~500 MB, cargo has no use for it
+python models.py         # writes cad-models/*.stl and *.step
+```
+
+CadQuery is not in nixpkgs (only the `opencascade-occt` kernel, without the
+Python bindings), so the shell pins the wheels and installs them into
+`.venv-cad` on first entry. Both that directory and `cad-models/` are ignored.
+
+### `terrasse_body` + `terrasse_floor`
+
+A 50 × 60 × 50 mm box for the bird scale, in two parts. The design follows from
+it hanging outdoors in the rain:
+
+- **The roof has no seam and no penetration.** The box is a cup opening
+  *downward*; the only joint faces the ground, where water cannot climb to it.
+  The top 5 mm flare 2 mm past the walls as an eave, so water crossing the roof
+  drips clear instead of running down the sides. Nothing is drilled through the
+  top — the cord attaches to two ears *outboard* of the walls, which is why
+  they stick out to 68 mm in X.
+- **The SHT31 sits in its own chamber**, walled off from the electronics
+  against the −Y side. Air enters through slots in the floor and leaves through
+  slots high in the side wall, tilted 30° down-and-out: a chimney whose every
+  opening faces down or outward-down. The baffle is the point — an SHT31 in the
+  main volume would measure the board, not the terrace, which is exactly the
+  ~0.9 °C of self-heating already measured in the bedroom.
+- **The load hangs off a pad on the underside of the floor**, matching the
+  clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
+  inside the box.
+
+Print the **body with the roof on the build plate** (opening up): every feature
+is then vertical or steps inward, so nothing needs support and the roof gets
+the smooth plate-side surface. Print the **floor with the anchor pad down**,
+which leaves the nut pockets opening upward. PETG or ASA — PLA creeps under a
+constant hanging load and yellows in UV.
+
+| | |
+|---|---|
+| Floor → body | 4 × M3 × 16, countersunk, into printed Ø2.5 pilots |
+| Clamp → anchor | 2 × M4 × 25 + 2 × M4 nuts (check against your clamp) |
+| Suspension | ~3 mm cord through both Ø4 ears, as a bail |
+
+Reflashing means taking the floor off — there is deliberately no USB opening.
+
 ## Firmware architecture
 
 | Concern            | Implementation                                                    |
