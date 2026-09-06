@@ -364,3 +364,182 @@ print("terrasse body  %.1f cm3   bbox %s" % (
     body.val().Volume() / 1000.0, body.val().BoundingBox()))
 print("terrasse floor %.1f cm3   bbox %s" % (
     floor.val().Volume() / 1000.0, floor.val().BoundingBox()))
+
+
+## ===========================================================================
+## Wohnzimmer — indoor housing for the air-quality node
+## ===========================================================================
+##
+## Two printed parts:
+##
+##   wohnzimmer_tray   floor, walls and the three compartments
+##   wohnzimmer_lid    flat cover, four screws
+##
+## Indoors, so nothing here is about rain. The shape is driven by two
+## constraints the commissioning notes already state:
+##
+##   "keep the SHT31-D away from the board [...] a board-warmed SHT31 reports
+##    a relative humidity that is too low, the correction then subtracts too
+##    little, and the error lands in the PM figures"
+##   "a sealed enclosure would have it measuring the enclosure"
+##
+## Hence three compartments in a row, divided by full-height baffles that also
+## carry the lid across its span:
+##
+##   -X  sensor chamber   SHT31 + SCD41, vented on three sides, ~90 mm of
+##                        still air away from the board. Both sensors here
+##                        want room air and neither runs a fan.
+##       SDS011 bay       a pocket the module drops into. Its intake is tubed
+##                        to a stub in the +Y wall so it draws room air, not
+##                        its own exhaust; the exhaust leaves through the -Y
+##                        wall, 84 mm away on the far side of the module.
+##   +X  board bay        a fitted pocket, cable out through the +X wall.
+##
+## A 10 mm service strip runs along +Y past the SDS011 for the intake tube and
+## for the sensor wiring, which has to cross the bay to reach the board. The
+## baffles are notched at floor level to let it through.
+##
+## Print both parts flat on the plate, tray floor down. Slots are vertical
+## cuts in vertical walls, so only their tops bridge -- no support needed.
+
+WZ_X, WZ_Y, WZ_Z = 145.0, 89.0, 32.0
+WZ_WALL = 2.5
+WZ_FLOOR = 3.0
+WZ_LID = 3.0
+
+WZ_IN_X = WZ_X - 2 * WZ_WALL      # 140
+WZ_IN_Y = WZ_Y - 2 * WZ_WALL      # 84
+WZ_IN_H = WZ_Z - WZ_FLOOR - WZ_LID  # 26
+WZ_TOP = WZ_FLOOR + WZ_IN_H       # 29, where the lid lands
+
+WZ_BAF = 2.0
+
+# Component envelopes. Measured values go here; everything else follows.
+SDS_XY = 73.5                     # 71 x 70 module, pocket kept SQUARE so it
+                                  # can be turned to any of four orientations
+                                  # -- which edge carries the intake nozzle
+                                  # differs between units, and the tube has to
+                                  # reach the stub.
+SDS_SERVICE = 10.0                # strip along +Y for tube and wiring
+SENS_X = 18.0                     # sensor chamber depth
+BOARD_X, BOARD_Y = 34.0, 56.0     # 33 x 55 board plus clearance
+BOARD_RIB = 8.0                   # pocket rib height
+
+# Compartment boundaries in X, left to right.
+WZ_X0 = -WZ_IN_X / 2              # -70
+SENS_X1 = WZ_X0 + SENS_X          # -52
+SDS_X0 = SENS_X1 + WZ_BAF         # -50
+SDS_X1 = SDS_X0 + SDS_XY          # 23.5
+BOARD_X0 = SDS_X1 + WZ_BAF        # 25.5
+
+WZ_Y1 = WZ_IN_Y / 2               # 42
+SDS_RIB_Y = WZ_Y1 - SDS_SERVICE - WZ_BAF   # 30, module stops here
+
+WZ_POST = 8.0
+WZ_PILOT, WZ_CLEAR, WZ_CSK = 2.5, 3.4, 6.6
+WZ_POST_XY = [(sx * (WZ_IN_X / 2 - WZ_POST / 2), sy * (WZ_IN_Y / 2 - WZ_POST / 2))
+              for sx in (-1, 1) for sy in (-1, 1)]
+
+INTAKE_OD, INTAKE_ID, INTAKE_L = 6.0, 4.0, 8.0   # stub mimics the SDS011 nozzle
+SLOT_W = 2.5                                      # every vent slot
+
+
+def _slots(shape, n, pitch, size, at, axis="z"):
+    """Cut `n` slots of `size` (l, w, h), stepped by `pitch` along `axis`."""
+    for i in range(n):
+        d = (i - (n - 1) / 2) * pitch
+        off = {"x": (d, 0, 0), "y": (0, d, 0), "z": (0, 0, d)}[axis]
+        shape = shape.cut(_box(*size, tuple(a + b for a, b in zip(at, off))))
+    return shape
+
+
+# ---------------------------------------------------------------------------
+# Tray
+# ---------------------------------------------------------------------------
+tray = _box(WZ_X, WZ_Y, WZ_TOP)
+tray = tray.cut(_box(WZ_IN_X, WZ_IN_Y, WZ_IN_H, (0, 0, WZ_FLOOR)))
+
+# Baffles. Full height: they separate the three air volumes and they are what
+# keeps a 145 mm lid from sagging between its four corner screws.
+for bx in (SENS_X1 + WZ_BAF / 2, SDS_X1 + WZ_BAF / 2):
+    tray = tray.union(_box(WZ_BAF, WZ_IN_Y, WZ_IN_H, (bx, 0, WZ_FLOOR)))
+    # Notch at floor level, inside the service strip, for the sensor wiring.
+    tray = tray.cut(_box(3 * WZ_BAF, 8.0, 6.0, (bx, WZ_Y1 - SDS_SERVICE / 2, WZ_FLOOR)))
+
+# Rib that stops the SDS011 short of the service strip.
+tray = tray.union(_box(SDS_XY, WZ_BAF, 6.0,
+                       ((SDS_X0 + SDS_X1) / 2, SDS_RIB_Y + WZ_BAF / 2, WZ_FLOOR)))
+
+# Intake stub in the +Y wall: push a short silicone tube from the module's
+# nozzle onto this, and the fan draws room air instead of the bay's own
+# exhaust. Without it the sensor slowly re-measures what it just measured.
+stub_c = ((SDS_X0 + SDS_X1) / 2, WZ_Y1 + WZ_WALL - INTAKE_L / 2, WZ_FLOOR + 9.0)
+tray = tray.union(
+    cq.Workplane("XZ").circle(INTAKE_OD / 2).extrude(INTAKE_L)
+    .translate((stub_c[0], WZ_Y1 + WZ_WALL, stub_c[2]))
+)
+tray = tray.cut(
+    cq.Workplane("XZ").circle(INTAKE_ID / 2).extrude(INTAKE_L + WZ_WALL + 2)
+    .translate((stub_c[0], WZ_Y1 + WZ_WALL + 1, stub_c[2]))
+)
+
+# Exhaust, -Y wall, the full length of the bay and as far from the intake as
+# the box allows.
+for z in (8.0, 13.0, 18.0):
+    tray = _slots(tray, 4, 17.0, (14.0, 3 * WZ_WALL, SLOT_W),
+                  ((SDS_X0 + SDS_X1) / 2, -WZ_Y1, WZ_FLOOR + z), axis="x")
+
+# Sensor chamber: vented on the -X end and both long walls, so it sees room
+# air by convection alone. No fan reaches in here.
+for z in (7.0, 12.0, 17.0):
+    tray = _slots(tray, 2, 34.0, (3 * WZ_WALL, 26.0, SLOT_W),
+                  (-WZ_IN_X / 2, 0, WZ_FLOOR + z), axis="y")
+    # Kept inboard of the corner posts: a slot cut across one would open the
+    # wall onto solid plastic and vent nothing.
+    for sy in (-1, 1):
+        tray = tray.cut(_box(8.0, 3 * WZ_WALL, SLOT_W,
+                             (WZ_X0 + WZ_POST + 5.0, sy * WZ_Y1, WZ_FLOOR + z)))
+
+# Card slot for the SHT31, standing on edge at the far end of the chamber
+# from the SCD41, which shares the compartment and does run slightly warm.
+tray = tray.union(_box(6.0, 18.0, 6.0, (WZ_X0 + SENS_X / 2, -22.0, WZ_FLOOR)))
+tray = tray.cut(_box(2.0, 22.0, 5.0, (WZ_X0 + SENS_X / 2, -22.0, WZ_FLOOR + 1.5)))
+
+# Board pocket, and the cable out through the +X wall.
+tray = tray.union(_box(WZ_BAF, BOARD_Y, BOARD_RIB,
+                       (BOARD_X0 + BOARD_X + WZ_BAF / 2, 0, WZ_FLOOR)))
+for sy in (-1, 1):
+    tray = tray.union(_box(BOARD_X + WZ_BAF, WZ_BAF, BOARD_RIB,
+                           (BOARD_X0 + (BOARD_X + WZ_BAF) / 2,
+                            sy * (BOARD_Y + WZ_BAF) / 2, WZ_FLOOR)))
+tray = tray.cut(_box(18.0, 14.0, 10.0, (WZ_IN_X / 2, 0, WZ_FLOOR)))
+for z in (16.0, 20.0):
+    tray = tray.cut(_box(3 * WZ_WALL, 26.0, SLOT_W, (WZ_IN_X / 2, 0, WZ_FLOOR + z)))
+
+# Corner posts for the lid.
+for (px, py) in WZ_POST_XY:
+    tray = tray.union(_box(WZ_POST, WZ_POST, WZ_IN_H, (px, py, WZ_FLOOR)))
+    tray = tray.cut(
+        cq.Workplane("XY").circle(WZ_PILOT / 2).extrude(WZ_IN_H)
+        .translate((px, py, WZ_FLOOR))
+    )
+
+display(tray)
+_export(tray, "wohnzimmer_tray")
+
+
+# ---------------------------------------------------------------------------
+# Lid
+# ---------------------------------------------------------------------------
+lid = _box(WZ_X, WZ_Y, WZ_LID)
+lid = (
+    lid.faces(">Z").workplane()
+    .pushPoints(WZ_POST_XY)
+    .cskHole(WZ_CLEAR, WZ_CSK, 90)
+)
+
+display(lid)
+_export(lid, "wohnzimmer_lid")
+
+print("wohnzimmer tray %.1f cm3  lid %.1f cm3" % (
+    tray.val().Volume() / 1000.0, lid.val().Volume() / 1000.0))

@@ -255,6 +255,49 @@ constant hanging load and yellows in UV.
 
 Reflashing means taking the floor off — there is deliberately no USB opening.
 
+### `wohnzimmer_tray` + `wohnzimmer_lid`
+
+A 145 × 89 × 32 mm flat box for the air-quality node. Indoors, so none of it is
+about rain; the shape comes from the two constraints
+[`docs/commissioning.md`](docs/commissioning.md) already records — keep the
+SHT31 away from the board, and do not let the SDS011 measure its own
+enclosure.
+
+Three compartments in a row, split by full-height baffles that double as the
+lid's mid-span support:
+
+| | |
+|---|---|
+| −X | **Sensor chamber**, 18 mm. SHT31 + SCD41, vented on three sides, 104 mm from the board. Both want room air; neither runs a fan. |
+| | **SDS011 bay**, 73.5 mm. A drop-in pocket. |
+| +X | **Board bay**, 44.5 mm. Fitted pocket for the 33 × 55 × 20 board, cable out through the end wall. |
+
+Two details carry most of the weight:
+
+- **The intake is tubed.** A stub in the +Y wall mimics the SDS011's own
+  nozzle; a short silicone tube between the two makes the fan draw room air.
+  Without it the module sits in a box slowly re-measuring what it just
+  measured. The exhaust leaves through the −Y wall, 84 mm away on the far side
+  of the module — as far apart as the box allows.
+- **The bay is square, 73.5 × 73.5.** The module is 71 × 70, so the pocket
+  costs 1.5 mm of nothing and buys all four orientations. Which edge carries
+  the intake nozzle differs between units, and the tube has to reach the stub.
+
+A 10 mm service strip runs along +Y past the module for that tube and for the
+sensor wiring, which has to cross the bay to reach the board; both baffles are
+notched at floor level to let it through.
+
+Print both parts flat, tray floor down — every slot is a vertical cut in a
+vertical wall, so only the slot tops bridge and nothing needs support.
+
+| | |
+|---|---|
+| Lid → tray | 4 × M3 × 25, countersunk, into printed Ø2.5 pilots |
+| SDS011 intake | ~40 mm of 6 mm silicone tube |
+
+> The module envelope is taken as **71 × 70 × 23 mm**. Measure yours before
+> printing — `SDS_XY` is the one number to change if it differs.
+
 ## Firmware architecture
 
 | Concern            | Implementation                                                    |
