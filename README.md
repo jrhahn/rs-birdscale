@@ -216,7 +216,9 @@ python models.py         # writes cad-models/*.stl and *.step
 
 CadQuery is not in nixpkgs (only the `opencascade-occt` kernel, without the
 Python bindings), so the shell pins the wheels and installs them into
-`.venv-cad` on first entry. Both that directory and `cad-models/` are ignored.
+`.venv-cad` on first entry (ignored). The exports under `cad-models/` are
+tracked, so printing a part does not require the toolchain at all — `.stl` to
+slice, `.step` to open in CAD.
 
 ### `terrasse_body` + `terrasse_floor`
 

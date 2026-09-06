@@ -28,6 +28,6 @@ result-*
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Enclosure CAD: generated meshes and the pinned CadQuery venv (see flake.nix).
-cad-models/
+# Enclosure CAD: the pinned CadQuery venv (see flake.nix). The exports under
+# cad-models/ are tracked -- printing a part should not require the toolchain.
 .venv-cad/
