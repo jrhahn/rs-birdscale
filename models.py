@@ -3,7 +3,6 @@ from cadquery import exporters
 from pathlib import Path
 import math
 import re
-import numpy as np
 
 
 path_save = Path("cad-models")
@@ -16,119 +15,6 @@ except NameError:
     def display(*_args, **_kwargs):
         pass
 
-
-## halterung biegebalken 1
-## Vogelwaage Dicke Schrauben
-# Dimensions
-height = 12
-width = 12
-length = 25
-
-total_length = 80
-balken_length = total_length / 2 + 20
-
-drill_distance = 15
-dia_screw = 4
-dia_screw_head = 8
-dia_wire = 1
-
-# 1. Base Geometry
-results = cq.Workplane("front").box(length, width, height)
-
-balken = (
-    cq.Workplane("front")
-    .box(balken_length, width, height / 2)
-    .translate((balken_length / 2 - length / 2, 0, -height / 4))
-)
-
-# Fuse the two solids into one
-results = results.union(balken)
-
-# 2. Add Countersunk Holes
-# We select the top face (>Z) and drill down using pushed points
-results = (
-    results.faces("<Z")
-    .workplane()
-    .pushPoints([(-drill_distance / 2, 0), (drill_distance / 2, 0)])
-    .cskHole(dia_screw, dia_screw_head, 90)
-)
-
-# 3. Add Wire Hole
-# Target the top face of the extended beam section
-wire_x_offset = total_length / 2 - length / 2
-results = (
-    results.faces("<Z")
-    .workplane()
-    .pushPoints([(wire_x_offset, 0)])
-    .hole(dia_wire)
-)
-
-# Render and Export
-display(results)
-exporters.export(results, str(path_save / "bird_scale_part1.stl"))
-
-## halterung biegebalken 2
-## Vogelwaage Dicke Schrauben
-# Dimensions
-height = 12
-width = 12
-length = 25
-
-total_length = 80
-balken_length = total_length / 2 + 20
-
-drill_distance = 15
-dia_screw = 5
-dia_screw_head = 10
-dia_wire = 1
-
-# 1. Base Geometry
-results = cq.Workplane("front").box(length, width, height)
-
-balken = (
-    cq.Workplane("front")
-    .box(balken_length, width, height / 2)
-    .translate((balken_length / 2 - length / 2, 0, -height / 4))
-)
-
-# Fuse the two solids into one
-results = results.union(balken)
-
-# 2. Add Countersunk Holes
-# We select the top face (>Z) and drill down using pushed points
-results = (
-    results.faces("<Z")
-    .workplane()
-    .pushPoints([(-drill_distance / 2, 0), (drill_distance / 2, 0)])
-    .cskHole(dia_screw, dia_screw_head, 90)
-)
-
-# 3. Add Wire Hole
-# Target the top face of the extended beam section
-wire_x_offset = total_length / 2 - length / 2
-results = (
-    results.faces("<Z")
-    .workplane()
-    .pushPoints([(wire_x_offset, 0)])
-    .hole(dia_wire)
-)
-
-## trapezoid
-# Create a 2D trapezoid using Sketch
-# trapezoid(w, h, angle)
-sketch = (
-    cq.Sketch()
-    .trapezoid(20, height/4, -60) # width, height, interior angle in degrees
-)
-
-# Extrude into 3D
-trapezoid = cq.Workplane("XZ").placeSketch(sketch).extrude(-20).translate( (wire_x_offset, -10, -height/8*3))
-
-results = results.cut(trapezoid)
-
-# Render and Export
-display(results)
-exporters.export(results, str(path_save / "bird_scale_with_box_part2.stl"))
 
 ## ===========================================================================
 ## Terrasse — outdoor housing for the bird-scale node
@@ -150,7 +36,7 @@ exporters.export(results, str(path_save / "bird_scale_with_box_part2.stl"))
 ##      One cord through both makes a bail: it hangs level and pierces
 ##      nothing. Load path is ear -> wall -> floor -> anchor, in line.
 ##   c) beam anchor            A pad on the underside of the floor, matching
-##      the clamp above (25 x 12 face, two screws at `drill_distance`), with
+##      the bending-beam clamp (25 x 12 face, two screws 15 mm apart), with
 ##      captive nuts reachable from inside the box.
 ##   d) ventilation            A chamber against the -Y wall, walled off from
 ##      the electronics so the board's own heat does not reach the SHT31.
@@ -205,7 +91,10 @@ BOSS_XY = [(sx * (IN_X / 2 - BOSS_D / 2), sy * (IN_Y / 2 - BOSS_D / 2))
 SCREW_CLEAR, SCREW_CSK = 3.4, 6.6
 
 # --- bending-beam anchor (M4) ---------------------------------------------
-ANCHOR_PITCH = drill_distance    # 15 mm, the clamp pitch set above
+# Interface to the bending-beam clamp. The clamp's own model lived in this
+# file until it was retired -- `git show d0df819:models.py` still has it. The
+# mating dimensions stay here, because the anchor is meaningless without them.
+ANCHOR_PITCH = 15.0              # clamp screw pitch
 ANCHOR_HOLE = 4.3
 NUT_AF, NUT_T = 7.2, 3.4         # M4 nut across flats, thickness
 PAD_X, PAD_Y, PAD_H = 27.0, 14.0, 3.5

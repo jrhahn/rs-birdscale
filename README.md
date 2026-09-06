@@ -206,8 +206,10 @@ until ~2.4 V, far past where a LiPo starts losing capacity for good.
 
 ## Enclosure
 
-[`models.py`](models.py) is the CadQuery source for the printed parts. The
-bending-beam clamps were there first; the `terrasse` housing is new.
+[`models.py`](models.py) is the CadQuery source for the printed parts: three
+enclosures, six pieces. The bending-beam clamps it started as have been
+retired — `git show d0df819:models.py` still has them, and the dimensions the
+`terrasse` anchor mates with are kept as constants in their own right.
 
 ```bash
 nix develop .#cad        # separate shell: OpenCASCADE is ~500 MB, cargo has no use for it
