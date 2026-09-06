@@ -2,6 +2,7 @@ import cadquery as cq
 from cadquery import exporters
 from pathlib import Path
 import math
+import re
 import numpy as np
 
 
@@ -217,6 +218,26 @@ def _box(l, w, h, at=(0.0, 0.0, 0.0)):
     )
 
 
+def _export(shape, stem):
+    """Write <stem>.stl and <stem>.step, both reproducible.
+
+    OpenCASCADE stamps the wall-clock time into the STEP header, so an
+    unchanged model would show up as a diff on every run. The meshes are
+    tracked, so that churn is not free -- pin the field instead.
+    """
+    exporters.export(shape, str(path_save / (stem + ".stl")))
+    step = path_save / (stem + ".step")
+    exporters.export(shape, str(step))
+    step.write_text(
+        re.sub(
+            r"(FILE_NAME\('[^']*',')[^']*(')",
+            r"\g<1>1970-01-01T00:00:00\g<2>",
+            step.read_text(),
+            count=1,
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Body
 # ---------------------------------------------------------------------------
@@ -271,8 +292,7 @@ for (px, py) in BOSS_XY:
     )
 
 display(body)
-exporters.export(body, str(path_save / "terrasse_body.stl"))
-exporters.export(body, str(path_save / "terrasse_body.step"))
+_export(body, "terrasse_body")
 
 
 # ---------------------------------------------------------------------------
@@ -338,8 +358,7 @@ floor = floor.union(_box(16.0, 5.5, 6.0, (0, -22.5, FLOOR_T)))
 floor = floor.cut(_box(20.0, 2.0, 5.0, (0, -22.5, FLOOR_T + 1.5)))
 
 display(floor)
-exporters.export(floor, str(path_save / "terrasse_floor.stl"))
-exporters.export(floor, str(path_save / "terrasse_floor.step"))
+_export(floor, "terrasse_floor")
 
 print("terrasse body  %.1f cm3   bbox %s" % (
     body.val().Volume() / 1000.0, body.val().BoundingBox()))
