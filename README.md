@@ -241,6 +241,13 @@ it hanging outdoors in the rain:
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
 
+The vertical corners are rounded (R3) and the ears are round-ended tabs. The
+**roof edge gets a 45° chamfer rather than a round**, and that is a deliberate
+trade: this part prints roof-down, so that edge is the *first layer*. A fillet
+there starts as a knife edge with a horizontal tangent and every layer steps
+outward over air. The chamfer softens the same edge, prints cleanly, and leaves
+the eave's underside sharp — which is the edge that actually sheds the water.
+
 Print the **body with the roof on the build plate** (opening up): every feature
 is then vertical or steps inward, so nothing needs support and the roof gets
 the smooth plate-side surface. Print the **floor with the anchor pad down**,
@@ -292,11 +299,36 @@ vertical wall, so only the slot tops bridge and nothing needs support.
 
 | | |
 |---|---|
-| Lid → tray | 4 × M3 × 25, countersunk, into printed Ø2.5 pilots |
+| Lid → tray | 4 × M3 × 25, countersunk, into printed Ø2.5 pilots (both indoor boxes) |
 | SDS011 intake | ~40 mm of 6 mm silicone tube |
 
 > The module envelope is taken as **71 × 70 × 23 mm**. Measure yours before
 > printing — `SDS_XY` is the one number to change if it differs.
+
+### `climate_tray` + `climate_lid`
+
+65 × 39 × 30 mm, and it serves **both `kueche` and `bad`** — `node.rs` calls
+the kitchen "the same build as `BAD`", and the contents match: a XIAO and an
+SHT31 on jumper wires, nothing else. Print it twice.
+
+Small, but the same rule holds. Two compartments with a baffle between them:
+a 22 mm sensor chamber vented on three sides, and the board bay. A node whose
+only job is temperature and humidity has nothing to report if it reports the
+inside of its own box.
+
+The XIAO drops into a ribbed pocket with its USB-C end toward the wall, and
+the 8.5 mm between baffle and board is deliberate — that is where the jumper
+wire slack goes. The baffle's notch is sized for four wires, not for air.
+
+> The pocket assumes a bare XIAO lying flat on the tray floor. On a carrier
+> board, change `XIAO_X` / `XIAO_Y`.
+
+### Rounding
+
+Vertical corners are R3 on all three housings; the two lids also get their top
+edge rounded. Lids print underside-down, so that round closes *inward* layer by
+layer and costs nothing — unlike the terrasse roof, which is why that one is
+chamfered instead. `CORNER_R` and `TOP_BREAK` set both.
 
 ## Firmware architecture
 
