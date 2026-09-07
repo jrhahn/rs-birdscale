@@ -75,12 +75,22 @@ EAR_HOLE = 4.0                   # 3 mm cord knots through comfortably
 CORNER_R = 3.0                   # vertical corners, both housings
 TOP_BREAK = 1.5                  # how much the top edge is taken off
 
-# --- vent chamber, centred on the -Y wall ---------------------------------
-CH_X, CH_Y = 22.0, 12.0         # width lands on the corner posts, see below
+# --- vent chamber, in the -X/-Y corner ------------------------------------
+# It used to span the middle of the -Y wall, which left the longest clear run
+# in the box at 38 mm. A 103450 cell needs 50, and Y (52 mm) is the only axis
+# that has it -- so the chamber moved into a corner and gave the run back.
+CH_X, CH_Y = 17.0, 16.0
 BAFFLE = 2.0
-CH_Y0 = -IN_Y / 2                # -26
+CH_X0 = -IN_X / 2                # -21, against the -X wall
+CH_Y0 = -IN_Y / 2                # -26, against the -Y wall
+# The corner post lands inside the cavity and is unioned back in afterwards,
+# so the chamber is L-shaped. That is deliberate: a post in the box corner
+# fuses into both outer walls, which is where it belongs, and the L still
+# holds the sensor card with room to spare.
 
-VENT_W, VENT_H = 14.0, 2.5       # outlet slots in the side wall
+VENT_H = 2.5                     # outlet slots, both walls
+VENT_Y_W = 7.0                   # -Y wall, clear of the corner post
+VENT_X_W = 6.0                   # -X wall, likewise
 VENT_Z = [32.0, 36.0, 40.0]
 VENT_TILT = 30.0                 # degrees, sloping down and outward
 
@@ -101,8 +111,19 @@ PAD_X, PAD_Y, PAD_H = 27.0, 14.0, 3.5
 FLANGE_X, FLANGE_Y, FLANGE_H = 33.0, 18.0, 2.5
 NUT_BOSS_H = 5.0                 # boss inside the box carrying the nuts
 
-CABLE_D, CABLE_Y = 6.0, 15.0     # load-cell cable, up through the floor
-DRAIN_D, DRAIN_Y = 3.0, 24.0     # condensate drain, main compartment
+CABLE_D, CABLE_XY = 6.0, (-8.0, 15.0)   # load-cell cable, up through the floor
+DRAIN_D, DRAIN_XY = 3.0, (-8.0, 22.0)   # condensate drain, main compartment
+
+# --- battery: one 103450 cell (10 x 34 x 50) on edge, running in Y ---------
+# Held by two cable ties rather than clamped between ribs. A pouch cell wants
+# that: it swells a little as it ages, and a rigid pocket sized to a new one
+# is a press fit on an old one.
+CELL_T, CELL_L, CELL_H = 10.0, 50.0, 34.0
+CELL_X = 6.0                     # lane centre; cell spans x = 1 .. 11
+CELL_Z = FLOOR_T + NUT_BOSS_H    # 8, the cell rests on the nut boss
+SUPPORT_Y = 21.0                 # end supports, level with that boss
+TIE_Y = 15.0                     # cable-tie crossings
+TIE_W, TIE_CH = 1.6, 1.5         # tie slot width, recess depth underneath
 
 
 def _box(l, w, h, at=(0.0, 0.0, 0.0)):
@@ -162,29 +183,37 @@ for sx in (-1, 1):
         .translate((eye, 0, ENV_Z - EAVE_H))
     )
 
-# Vent chamber: add the baffle block, then hollow the chamber out of it.
+# Vent chamber: add the corner block, then hollow it out. Two baffles, on the
+# +X and +Y sides; the outer walls close the other two.
 body = body.union(
-    _box(CH_X + 2 * BAFFLE, CH_Y + BAFFLE, Z_CEIL - Z_FLOOR,
-         (0, CH_Y0 + (CH_Y + BAFFLE) / 2, Z_FLOOR))
+    _box(CH_X + BAFFLE, CH_Y + BAFFLE, Z_CEIL - Z_FLOOR,
+         (CH_X0 + (CH_X + BAFFLE) / 2, CH_Y0 + (CH_Y + BAFFLE) / 2, Z_FLOOR))
 )
 body = body.cut(
-    _box(CH_X, CH_Y, Z_CEIL - Z_FLOOR, (0, CH_Y0 + CH_Y / 2, Z_FLOOR))
+    _box(CH_X, CH_Y, Z_CEIL - Z_FLOOR,
+         (CH_X0 + CH_X / 2, CH_Y0 + CH_Y / 2, Z_FLOOR))
 )
 
-# Cable pass-through in the baffle, for the SHT31's flying lead. Seal it with
-# a dab of silicone on assembly: it is the one path from the chamber into the
-# electronics volume, and it is there for the wire, not for air.
-body = body.cut(_box(6.0, 3 * BAFFLE, 4.0, (0, CH_Y0 + CH_Y, 42.0)))
+# Cable pass-through in the +Y baffle, for the SHT31's flying lead. Seal it
+# with a dab of silicone on assembly: it is the one path from the chamber into
+# the electronics volume, and it is there for the wire, not for air.
+body = body.cut(
+    _box(6.0, 3 * BAFFLE, 4.0, (CH_X0 + 9.0, CH_Y0 + CH_Y + BAFFLE / 2, 42.0))
+)
 
-# Outlet slots, tilted down and outward so nothing runs in.
+# Outlet slots, tilted down and outward so nothing runs in. Two walls now,
+# each in the stretch the corner post does not stand behind.
 for z in VENT_Z:
-    slot = (
-        cq.Workplane("XY")
-        .box(VENT_W, 12.0, VENT_H)
+    body = body.cut(
+        cq.Workplane("XY").box(VENT_Y_W, 12.0, VENT_H)
         .rotate((0, 0, 0), (1, 0, 0), VENT_TILT)
-        .translate((0, -BODY_Y / 2 + WALL / 2, z))
+        .translate((CH_X0 + 12.5, -BODY_Y / 2 + WALL / 2, z))
     )
-    body = body.cut(slot)
+    body = body.cut(
+        cq.Workplane("XY").box(12.0, VENT_X_W, VENT_H)
+        .rotate((0, 0, 0), (0, 1, 0), -VENT_TILT)
+        .translate((-BODY_X / 2 + WALL / 2, CH_Y0 + 12.0, z))
+    )
 
 # Screw bosses for the floor.
 for (px, py) in BOSS_XY:
@@ -241,31 +270,42 @@ for (px, py) in anchor_pts:
 
 # Load-cell cable, with a collar underneath that sheds water off the lead.
 floor = floor.union(
-    cq.Workplane("XY").circle(5.0).extrude(4.0).translate((0, CABLE_Y, -4.0))
+    cq.Workplane("XY").circle(5.0).extrude(4.0)
+    .translate((CABLE_XY[0], CABLE_XY[1], -4.0))
 )
 floor = floor.cut(
     cq.Workplane("XY").circle(CABLE_D / 2).extrude(FLOOR_T + 4.0)
-    .translate((0, CABLE_Y, -4.0))
+    .translate((CABLE_XY[0], CABLE_XY[1], -4.0))
 )
 
 # Condensate drain for the electronics volume.
 floor = floor.cut(
     cq.Workplane("XY").circle(DRAIN_D / 2).extrude(FLOOR_T)
-    .translate((0, DRAIN_Y, 0))
+    .translate((DRAIN_XY[0], DRAIN_XY[1], 0))
 )
 
-# Air inlet under the vent chamber: two slots behind the sensor card and
-# two flanking it, so the card does not sit on top of its own inlet.
-for sy in (-18.9, -15.4):
-    floor = floor.cut(_box(16.0, 2.0, FLOOR_T, (0, sy, 0)))
-for sx in (-9.5, 9.5):
-    floor = floor.cut(_box(2.0, 10.0, FLOOR_T, (sx, -20.5, 0)))
+# Air inlet, in the leg of the L the sensor card does not stand in.
+for sy in (-24.5, -21.5, -18.5):
+    floor = floor.cut(_box(8.0, 2.0, FLOOR_T, (CH_X0 + 12.5, sy, 0)))
 
-# Card slot for the SHT31 breakout, standing on edge in the chamber. Held
-# 0.75 mm off the outer wall: it belongs to the floor, the wall to the body,
-# and they have to come apart.
-floor = floor.union(_box(16.0, 5.5, 6.0, (0, -22.5, FLOOR_T)))
-floor = floor.cut(_box(20.0, 2.0, 5.0, (0, -22.5, FLOOR_T + 1.5)))
+# Card slot for the SHT31 breakout, standing on edge across the chamber's
+# other leg. Held clear of the outer wall: it belongs to the floor, the wall
+# to the body, and they have to come apart.
+floor = floor.union(_box(16.0, 6.0, 6.0, (CH_X0 + 9.0, CH_Y0 + 12.0, FLOOR_T)))
+floor = floor.cut(_box(20.0, 2.0, 5.0, (CH_X0 + 9.0, CH_Y0 + 12.0, FLOOR_T + 1.5)))
+
+# Battery lane. Two end supports bring the cell up level with the nut boss,
+# so it rests on three points along its 50 mm and clears the floor -- which
+# is where condensate and the drain are.
+for sy in (-1, 1):
+    floor = floor.union(_box(12.0, 3.0, NUT_BOSS_H,
+                             (CELL_X, sy * SUPPORT_Y, FLOOR_T)))
+# Cable ties: up one slot, over the cell, down the other, and back through a
+# recess in the underside so the box still sits flat.
+for sy in (-1, 1):
+    floor = floor.cut(_box(17.0, 6.0, TIE_CH, (CELL_X + 0.5, sy * TIE_Y, 0)))
+    for tx in (CELL_X - 6.5, CELL_X + 6.3):
+        floor = floor.cut(_box(TIE_W, 5.0, FLOOR_T, (tx, sy * TIE_Y, 0)))
 
 display(floor)
 _export(floor, "terrasse_floor")

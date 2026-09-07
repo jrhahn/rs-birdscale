@@ -233,12 +233,20 @@ it hanging outdoors in the rain:
   drips clear instead of running down the sides. Nothing is drilled through the
   top — the cord attaches to two ears *outboard* of the walls, which is why
   they stick out to 68 mm in X.
-- **The SHT31 sits in its own chamber**, walled off from the electronics
-  against the −Y side. Air enters through slots in the floor and leaves through
-  slots high in the side wall, tilted 30° down-and-out: a chimney whose every
-  opening faces down or outward-down. The baffle is the point — an SHT31 in the
-  main volume would measure the board, not the terrace, which is exactly the
-  ~0.9 °C of self-heating already measured in the bedroom.
+- **The SHT31 sits in its own chamber**, an L-shaped column in the −X/−Y
+  corner, walled off from the electronics by two baffles. Air enters through
+  slots in the floor and leaves through slots high in *both* adjacent walls,
+  tilted 30° down-and-out: a chimney whose every opening faces down or
+  outward-down. The baffle is the point — an SHT31 in the main volume would
+  measure the board, not the terrace, which is exactly the ~0.9 °C of
+  self-heating already measured in the bedroom.
+- **The cell gets a lane, not a pocket.** One 103450 (10 × 34 × 50 mm) stands
+  on edge running in Y, resting on the anchor's nut boss and two end supports
+  so it sits 5 mm clear of the floor, where the drain and any condensate are.
+  Two cable ties hold it down, passing through the floor into recesses on the
+  underside so the box still sits flat. Ties rather than a rib pocket
+  deliberately: a pouch cell swells a little as it ages, and a pocket sized to
+  a new one is a press fit on an old one.
 - **The load hangs off a pad on the underside of the floor**, matching the
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
@@ -261,6 +269,19 @@ constant hanging load and yellows in UV.
 | Floor → body | 4 × M3 × 16, countersunk, into printed Ø2.5 pilots |
 | Clamp → anchor | 2 × M4 × 25 + 2 × M4 nuts (check against your clamp) |
 | Suspension | ~3 mm cord through both Ø4 ears, as a bail |
+| Cell | 2 × cable ties, ≤ 2.5 mm wide |
+
+**Why the chamber is in a corner.** It used to span the middle of the −Y wall,
+which is tidier and was wrong: it left the longest clear run in the box at
+38 mm. A 103450 cell needs 50, and Y (52 mm) is the only axis that has it. The
+first fit check missed this because it tested the cell against the *bounding*
+interior rather than the free space — 42 × 52 × 45 with only 10 % of it
+occupied, and nowhere for a 50 mm object to lie.
+
+**What is left for the boards.** The XIAO fits flat beside the chamber. A
+compact HX711 breakout (≈22 × 16 mm) fits flat too; the common 34 × 21 mm
+module only fits **standing on edge**, above the nut boss. There are no board
+pockets yet — tell me which module you have and they can be added.
 
 Reflashing means taking the floor off — there is deliberately no USB opening.
 
