@@ -224,64 +224,77 @@ slice, `.step` to open in CAD.
 
 ### `terrasse_body` + `terrasse_floor`
 
-A 50 × 60 × 50 mm box for the bird scale, in two parts. The design follows from
-it hanging outdoors in the rain:
+An **88 × 78 × 60 mm** box for the bird scale, in two parts. The size is not a
+choice — it comes from the measured envelopes, plugs included:
+
+| | | | |
+|---|---|---|---|
+| ESP32-C3 board | 40 × 30 × 35 | HX711 board | 40 × 25 × 30 |
+| battery | 65 × 50 × 10 | SHT31 | 20 × 10 × 10 |
+
+That is 128 cm³ with clearance. The first version of this box had a 98 cm³
+interior, so no amount of rearranging would have done it; a grid packing search
+puts the smallest interior that takes all four at 76 × 66 × 52, and only with
+everything stood on end. This one is 80 × 70 × 55, which leaves room for the
+mounts themselves.
+
+The design follows from it hanging outdoors in the rain:
 
 - **The roof has no seam and no penetration.** The box is a cup opening
   *downward*; the only joint faces the ground, where water cannot climb to it.
   The top 5 mm flare 2 mm past the walls as an eave, so water crossing the roof
   drips clear instead of running down the sides. Nothing is drilled through the
-  top — the cord attaches to two ears *outboard* of the walls, which is why
-  they stick out to 68 mm in X.
+  top — the cord attaches to two round-ended tabs *outboard* of the walls,
+  which is why the part reaches 108 mm across.
 - **The SHT31 sits in its own chamber**, an L-shaped column in the −X/−Y
-  corner, walled off from the electronics by two baffles. Air enters through
-  slots in the floor and leaves through slots high in *both* adjacent walls,
-  tilted 30° down-and-out: a chimney whose every opening faces down or
-  outward-down. The baffle is the point — an SHT31 in the main volume would
-  measure the board, not the terrace, which is exactly the ~0.9 °C of
-  self-heating already measured in the bedroom.
-- **The cell gets a lane, not a pocket.** One 103450 (10 × 34 × 50 mm) stands
-  on edge running in Y, resting on the anchor's nut boss and two end supports
-  so it sits 5 mm clear of the floor, where the drain and any condensate are.
-  Two cable ties hold it down, passing through the floor into recesses on the
-  underside so the box still sits flat. Ties rather than a rib pocket
-  deliberately: a pouch cell swells a little as it ages, and a pocket sized to
-  a new one is a press fit on an old one.
+  corner, walled off by two baffles. Air enters through floor slots and leaves
+  through slots high in *both* adjacent walls, tilted 30° down-and-out: a
+  chimney whose every opening faces down or outward-down. The baffle is the
+  point — an SHT31 in the main volume would measure the board, not the terrace,
+  which is exactly the ~0.9 °C of self-heating already measured in the bedroom.
 - **The load hangs off a pad on the underside of the floor**, matching the
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
 
-The vertical corners are rounded (R3) and the ears are round-ended tabs. The
-**roof edge gets a 45° chamfer rather than a round**, and that is a deliberate
-trade: this part prints roof-down, so that edge is the *first layer*. A fillet
-there starts as a knife edge with a horizontal tangent and every layer steps
-outward over air. The chamfer softens the same edge, prints cleanly, and leaves
-the eave's underside sharp — which is the edge that actually sheds the water.
+**Everything mounts to the floor plate and stands up from it.** That is not
+tidiness: the body prints roof-down, so any horizontal feature inside it would
+be printing over thin air. The floor plate prints anchor-down, where ribs,
+rails and columns are all free.
 
-Print the **body with the roof on the build plate** (opening up): every feature
-is then vertical or steps inward, so nothing needs support and the roof gets
-the smooth plate-side surface. Print the **floor with the anchor pad down**,
-which leaves the nut pockets opening upward. PETG or ASA — PLA creeps under a
-constant hanging load and yellows in UV.
+So the boards sit on **rails at 8 mm**, which is exactly the height of the
+anchor's nut boss — that puts the anchor *underneath* the ESP instead of
+fighting it for floor area, and the ESP's 41 mm depth is the one footprint that
+cannot avoid the centre. The ESP therefore gets one rail at its far end and the
+boss as its second support; a symmetric pair would have covered the two nut
+pockets, and the nuts have to drop in from above.
+
+The two boards take 41 + 26 mm of the 70 mm available, so there is room for
+**one** rib between them — the box walls stop them on the other side.
+
+The **battery stands on edge** in a lane between two guides, doubling as the
+divider between the boards and the +X wall. No cable tie: at 52 mm tall a tie
+would have to pass over its top, and on the −X side that lands under the ESP.
+It is captured on all four sides instead — guides in X, box walls in Y (a
+65 mm cell in a 70 mm interior), floor below. A strip of self-adhesive foam on
+the guide tops takes up the last 3 mm if it rattles.
+
+The vertical corners are rounded (R3). The **roof edge gets a 45° chamfer
+rather than a round**, and that is a deliberate trade: this part prints
+roof-down, so that edge is the *first layer*. A fillet there starts as a knife
+edge with a horizontal tangent and every layer steps outward over air. The
+chamfer softens the same edge, prints cleanly, and leaves the eave's underside
+sharp — which is the edge that actually sheds the water.
+
+Print the **body with the roof on the build plate** (opening up) and the
+**floor with the anchor pad down**, which leaves the nut pockets opening
+upward. PETG or ASA — PLA creeps under a constant hanging load and yellows in
+UV.
 
 | | |
 |---|---|
 | Floor → body | 4 × M3 × 16, countersunk, into printed Ø2.5 pilots |
 | Clamp → anchor | 2 × M4 × 25 + 2 × M4 nuts (check against your clamp) |
-| Suspension | ~3 mm cord through both Ø4 ears, as a bail |
-| Cell | 2 × cable ties, ≤ 2.5 mm wide |
-
-**Why the chamber is in a corner.** It used to span the middle of the −Y wall,
-which is tidier and was wrong: it left the longest clear run in the box at
-38 mm. A 103450 cell needs 50, and Y (52 mm) is the only axis that has it. The
-first fit check missed this because it tested the cell against the *bounding*
-interior rather than the free space — 42 × 52 × 45 with only 10 % of it
-occupied, and nowhere for a 50 mm object to lie.
-
-**What is left for the boards.** The XIAO fits flat beside the chamber. A
-compact HX711 breakout (≈22 × 16 mm) fits flat too; the common 34 × 21 mm
-module only fits **standing on edge**, above the nut boss. There are no board
-pockets yet — tell me which module you have and they can be added.
+| Suspension | ~3 mm cord through both Ø4 tabs, as a bail |
 
 Reflashing means taking the floor off — there is deliberately no USB opening.
 

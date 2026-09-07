@@ -23,75 +23,81 @@ except NameError:
 ## Two printed parts:
 ##
 ##   terrasse_body   walls + closed top. Open at the BOTTOM.
-##   terrasse_floor  bottom plate. Carries the bending-beam anchor.
+##   terrasse_floor  bottom plate. Carries the anchor and every mount.
+##
+## Sized from the measured envelopes, plugs included:
+##
+##   ESP32-C3 board   40 x 30 x 35      battery   65 x 50 x 10
+##   HX711 board      40 x 25 x 30      SHT31     20 x 10 x 10
+##
+## That is 128 cm3 with clearance. The first version of this box had a 98 cm3
+## interior, so it was not a matter of rearranging -- a grid packing search
+## puts the smallest interior that takes all four at 76 x 66 x 52, and only
+## with everything stood on end. This one is 80 x 70 x 55, which leaves room
+## for the mounts themselves.
 ##
 ## The four requirements, and how each is met:
 ##
 ##   a) waterproof from above  There is no seam and no penetration in the roof.
 ##      The top is one integral wall, and the only joint faces down, where
-##      water cannot climb to it. The top 5 mm flare out 2 mm past the walls
-##      as an eave, so water crossing the roof leaves the box clear of the
-##      side walls instead of running down them.
-##   b) cord attachment        Two ears at roof level, outboard of the walls.
-##      One cord through both makes a bail: it hangs level and pierces
-##      nothing. Load path is ear -> wall -> floor -> anchor, in line.
+##      water cannot climb to it. The top 5 mm flare 2 mm past the walls as an
+##      eave, so water crossing the roof leaves the box clear of the side
+##      walls instead of running down them.
+##   b) cord attachment        Two round-ended tabs at roof level, outboard of
+##      the walls. One cord through both makes a bail: it hangs level and
+##      pierces nothing. Load path is tab -> wall -> floor -> anchor, in line.
 ##   c) beam anchor            A pad on the underside of the floor, matching
 ##      the bending-beam clamp (25 x 12 face, two screws 15 mm apart), with
 ##      captive nuts reachable from inside the box.
-##   d) ventilation            A chamber against the -Y wall, walled off from
-##      the electronics so the board's own heat does not reach the SHT31.
-##      Air enters through slots in the floor and leaves through downward-
-##      tilted slots high in the side wall -> a chimney. Both openings face
-##      down or outward-down; neither admits falling or driving rain.
+##   d) ventilation            An L-shaped chamber in the -X/-Y corner, walled
+##      off from the electronics so the board's own heat does not reach the
+##      SHT31. Air enters through slots in the floor and leaves through slots
+##      high in both adjacent walls, tilted 30 deg down-and-out: a chimney
+##      whose every opening faces down or outward-down.
 ##
-## Print the body with the ROOF ON THE BUILD PLATE (opening up). Every
-## feature is then either vertical or steps inward, so nothing needs support
-## and the roof gets the smooth plate-side surface. Print the floor with the
-## anchor pad on the plate, which leaves the nut pockets opening upward.
+## Everything mounts to the floor plate and stands up from it. That is not
+## tidiness -- the body prints roof-down, so any horizontal feature inside it
+## would be printing over thin air. The floor plate prints anchor-down, where
+## ribs, rails and columns are all free.
+##
+## Print the body with the ROOF ON THE BUILD PLATE (opening up): every feature
+## is then vertical or steps inward, so nothing needs support and the roof
+## gets the smooth plate-side surface.
 
-# --- envelope, as specified -----------------------------------------------
-ENV_X, ENV_Y, ENV_Z = 50.0, 60.0, 50.0   # length, width, height
+# --- envelope -------------------------------------------------------------
+ENV_X, ENV_Y, ENV_Z = 88.0, 78.0, 60.0   # length, width, height
 
 WALL = 2.0        # side and roof wall
 FLOOR_T = 3.0     # floor plate
 EAVE = 2.0        # how far the drip edge stands proud of the wall
 EAVE_H = 5.0      # height of the drip-edge band
 
-BODY_X = ENV_X - 2 * EAVE        # 46, wall outside
-BODY_Y = ENV_Y - 2 * EAVE        # 56
-IN_X = BODY_X - 2 * WALL         # 42, usable inside
-IN_Y = BODY_Y - 2 * WALL         # 52
+BODY_X = ENV_X - 2 * EAVE        # 84, wall outside
+BODY_Y = ENV_Y - 2 * EAVE        # 74
+IN_X = BODY_X - 2 * WALL         # 80, usable inside
+IN_Y = BODY_Y - 2 * WALL         # 70
 Z_FLOOR = FLOOR_T                # 3,  interior floor
-Z_CEIL = ENV_Z - WALL            # 48, interior ceiling
+Z_CEIL = ENV_Z - WALL            # 58, interior ceiling
 
-# --- hanging ears ---------------------------------------------------------
-# A rounded tab rather than a rectangle: the eye is a circle anyway, and a
-# square corner on a part that hangs at eye level looks unfinished.
+# --- hanging tabs ---------------------------------------------------------
 EAR_NECK = 4.5                   # straight part, wall to eye centre
 EAR_W = 11.0
 EAR_R = 5.5                      # radius of the eye end
 EAR_HOLE = 4.0                   # 3 mm cord knots through comfortably
 
-CORNER_R = 3.0                   # vertical corners, both housings
-TOP_BREAK = 1.5                  # how much the top edge is taken off
+CORNER_R = 3.0                   # vertical corners
+TOP_BREAK = 1.5                  # how much the roof edge is taken off
 
 # --- vent chamber, in the -X/-Y corner ------------------------------------
-# It used to span the middle of the -Y wall, which left the longest clear run
-# in the box at 38 mm. A 103450 cell needs 50, and Y (52 mm) is the only axis
-# that has it -- so the chamber moved into a corner and gave the run back.
-CH_X, CH_Y = 17.0, 16.0
+CH_X, CH_Y = 18.0, 16.0
 BAFFLE = 2.0
-CH_X0 = -IN_X / 2                # -21, against the -X wall
-CH_Y0 = -IN_Y / 2                # -26, against the -Y wall
-# The corner post lands inside the cavity and is unioned back in afterwards,
-# so the chamber is L-shaped. That is deliberate: a post in the box corner
-# fuses into both outer walls, which is where it belongs, and the L still
-# holds the sensor card with room to spare.
+CH_X0 = -IN_X / 2                # -40, against the -X wall
+CH_Y0 = -IN_Y / 2                # -35, against the -Y wall
 
 VENT_H = 2.5                     # outlet slots, both walls
-VENT_Y_W = 7.0                   # -Y wall, clear of the corner post
-VENT_X_W = 6.0                   # -X wall, likewise
-VENT_Z = [32.0, 36.0, 40.0]
+VENT_Y_W = 8.0                   # -Y wall, clear of the corner post
+VENT_X_W = 7.0                   # -X wall, likewise
+VENT_Z = [38.0, 44.0, 50.0]
 VENT_TILT = 30.0                 # degrees, sloping down and outward
 
 # --- floor-to-body screws (M3) --------------------------------------------
@@ -111,19 +117,34 @@ PAD_X, PAD_Y, PAD_H = 27.0, 14.0, 3.5
 FLANGE_X, FLANGE_Y, FLANGE_H = 33.0, 18.0, 2.5
 NUT_BOSS_H = 5.0                 # boss inside the box carrying the nuts
 
-CABLE_D, CABLE_XY = 6.0, (-8.0, 15.0)   # load-cell cable, up through the floor
-DRAIN_D, DRAIN_XY = 3.0, (-8.0, 22.0)   # condensate drain, main compartment
+# Boards sit on rails this high, which is exactly the nut boss. The anchor
+# then lives *under* the ESP instead of fighting it for floor area -- and the
+# ESP's 42 mm depth is the one footprint that cannot avoid the centre.
+DECK_Z = FLOOR_T + NUT_BOSS_H    # 8
 
-# --- battery: one 103450 cell (10 x 34 x 50) on edge, running in Y ---------
-# Held by two cable ties rather than clamped between ribs. A pouch cell wants
-# that: it swells a little as it ages, and a rigid pocket sized to a new one
-# is a press fit on an old one.
-CELL_T, CELL_L, CELL_H = 10.0, 50.0, 34.0
-CELL_X = 6.0                     # lane centre; cell spans x = 1 .. 11
-CELL_Z = FLOOR_T + NUT_BOSS_H    # 8, the cell rests on the nut boss
-SUPPORT_Y = 21.0                 # end supports, level with that boss
-TIE_Y = 15.0                     # cable-tie crossings
-TIE_W, TIE_CH = 1.6, 1.5         # tie slot width, recess depth underneath
+CABLE_D, CABLE_XY = 6.0, (-34.0, 20.0)   # load-cell cable, up through the floor
+DRAIN_D, DRAIN_XY = 3.0, (-34.0, 0.0)    # condensate drain
+
+# --- the parts, as measured, plus 2 mm clearance --------------------------
+# (footprint x, footprint y, height, centre x, centre y, base z, rail offsets)
+# The rail offsets are given rather than derived: the obvious symmetric pair
+# put the ESP's front rail straight across the two anchor screws.
+# The ESP gets one rail, at the far end. Its second support is the anchor's
+# nut boss, which stands at exactly this height and sits inside its footprint.
+# A symmetric second rail would have covered the two nut pockets, and the
+# nuts have to drop in from above.
+ESP = (32.0, 41.0, 37.0, 1.0, -14.5, DECK_Z, (-15.5,))
+HX711 = (42.0, 26.0, 32.0, -9.0, 21.0, DECK_Z, (-9.0, 9.0))
+RIB, RAIL_W = 2.0, 4.0           # pocket rib, support rail
+RIB_H = 6.0                      # how far a rib stands above the rail
+
+# Battery on edge, doubling as the divider between the boards and the +X
+# wall. Held by two cable ties, not clamped: a pouch cell swells a little as
+# it ages, and a pocket sized to a new one is a press fit on an old one.
+CELL_T, CELL_L, CELL_H = 12.0, 67.0, 52.0
+CELL_X = 25.0                    # lane centre; cell spans x = 19 .. 31
+CELL_RIB_H = 30.0                # side guides, tall enough to hold it upright
+CELL_GUIDE_Y = 26.0              # ... but stopping short of the corner posts
 
 
 def _box(l, w, h, at=(0.0, 0.0, 0.0)):
@@ -169,7 +190,7 @@ body = body.union(
 # open downward and the roof stays a single unbroken wall.
 body = body.cut(_box(IN_X, IN_Y, Z_CEIL - Z_FLOOR, (0, 0, Z_FLOOR)))
 
-# Hanging ears, flush with the eave band.
+# Hanging tabs, flush with the eave band.
 for sx in (-1, 1):
     eye = sx * (ENV_X / 2 + EAR_NECK)
     body = body.union(_box(EAR_NECK, EAR_W, EAVE_H,
@@ -184,7 +205,9 @@ for sx in (-1, 1):
     )
 
 # Vent chamber: add the corner block, then hollow it out. Two baffles, on the
-# +X and +Y sides; the outer walls close the other two.
+# +X and +Y sides; the outer walls close the other two. The corner post lands
+# inside and is unioned back in below, so the cavity ends up L-shaped -- which
+# is fine, and keeps the post fused into both outer walls where it belongs.
 body = body.union(
     _box(CH_X + BAFFLE, CH_Y + BAFFLE, Z_CEIL - Z_FLOOR,
          (CH_X0 + (CH_X + BAFFLE) / 2, CH_Y0 + (CH_Y + BAFFLE) / 2, Z_FLOOR))
@@ -198,16 +221,16 @@ body = body.cut(
 # with a dab of silicone on assembly: it is the one path from the chamber into
 # the electronics volume, and it is there for the wire, not for air.
 body = body.cut(
-    _box(6.0, 3 * BAFFLE, 4.0, (CH_X0 + 9.0, CH_Y0 + CH_Y + BAFFLE / 2, 42.0))
+    _box(6.0, 3 * BAFFLE, 4.0, (CH_X0 + 9.0, CH_Y0 + CH_Y + BAFFLE / 2, 50.0))
 )
 
-# Outlet slots, tilted down and outward so nothing runs in. Two walls now,
-# each in the stretch the corner post does not stand behind.
+# Outlet slots, tilted down and outward so nothing runs in. Two walls, each in
+# the stretch the corner post does not stand behind.
 for z in VENT_Z:
     body = body.cut(
         cq.Workplane("XY").box(VENT_Y_W, 12.0, VENT_H)
         .rotate((0, 0, 0), (1, 0, 0), VENT_TILT)
-        .translate((CH_X0 + 12.5, -BODY_Y / 2 + WALL / 2, z))
+        .translate((CH_X0 + 13.0, -BODY_Y / 2 + WALL / 2, z))
     )
     body = body.cut(
         cq.Workplane("XY").box(12.0, VENT_X_W, VENT_H)
@@ -215,7 +238,7 @@ for z in VENT_Z:
         .translate((-BODY_X / 2 + WALL / 2, CH_Y0 + 12.0, z))
     )
 
-# Screw bosses for the floor.
+# Corner posts for the floor screws.
 for (px, py) in BOSS_XY:
     body = body.union(_box(BOSS_D, BOSS_D, BOSS_H, (px, py, Z_FLOOR)))
     body = body.cut(
@@ -285,8 +308,8 @@ floor = floor.cut(
 )
 
 # Air inlet, in the leg of the L the sensor card does not stand in.
-for sy in (-24.5, -21.5, -18.5):
-    floor = floor.cut(_box(8.0, 2.0, FLOOR_T, (CH_X0 + 12.5, sy, 0)))
+for sy in (-33.0, -30.5, -28.0):
+    floor = floor.cut(_box(8.0, 2.0, FLOOR_T, (CH_X0 + 13.0, sy, 0)))
 
 # Card slot for the SHT31 breakout, standing on edge across the chamber's
 # other leg. Held clear of the outer wall: it belongs to the floor, the wall
@@ -294,26 +317,39 @@ for sy in (-24.5, -21.5, -18.5):
 floor = floor.union(_box(16.0, 6.0, 6.0, (CH_X0 + 9.0, CH_Y0 + 12.0, FLOOR_T)))
 floor = floor.cut(_box(20.0, 2.0, 5.0, (CH_X0 + 9.0, CH_Y0 + 12.0, FLOOR_T + 1.5)))
 
-# Battery lane. Two end supports bring the cell up level with the nut boss,
-# so it rests on three points along its 50 mm and clears the floor -- which
-# is where condensate and the drain are.
-for sy in (-1, 1):
-    floor = floor.union(_box(12.0, 3.0, NUT_BOSS_H,
-                             (CELL_X, sy * SUPPORT_Y, FLOOR_T)))
-# Cable ties: up one slot, over the cell, down the other, and back through a
-# recess in the underside so the box still sits flat.
-for sy in (-1, 1):
-    floor = floor.cut(_box(17.0, 6.0, TIE_CH, (CELL_X + 0.5, sy * TIE_Y, 0)))
-    for tx in (CELL_X - 6.5, CELL_X + 6.3):
-        floor = floor.cut(_box(TIE_W, 5.0, FLOOR_T, (tx, sy * TIE_Y, 0)))
+# Board mounts. Each board gets two rails to sit on at DECK_Z and a rib frame
+# to locate it. The rails are what put the anchor's nut boss underneath the
+# ESP rather than in its way.
+for (fx, fy, fh, cx, cy, bz, rails) in (ESP, HX711):
+    for ry in rails:
+        floor = floor.union(_box(fx - 2 * RAIL_W, RAIL_W, NUT_BOSS_H,
+                                 (cx, cy + ry, FLOOR_T)))
+    for sx in (-1, 1):
+        floor = floor.union(_box(RIB, fy, NUT_BOSS_H + RIB_H,
+                                 (cx + sx * (fx + RIB) / 2, cy, FLOOR_T)))
+
+# One rib between the two boards; the box walls stop them on the other side.
+# 41 + 26 + 2 = 69 of the 70 mm available, so there is no room for a rib on
+# every side -- the walls do that half of the work.
+floor = floor.union(_box(47.0, RIB, NUT_BOSS_H + RIB_H, (-6.5, 7.0, FLOOR_T)))
+
+# Battery lane: two side guides. No cable tie here, unlike the earlier
+# version of this box -- the cell now stands 52 mm tall, so a tie would have
+# to pass over its top, and on the -X side that lands under the ESP. It is
+# captured on all four sides instead: the guides in X, the box walls in Y
+# (67 mm cell in a 70 mm interior), the floor below. If it rattles, a strip of
+# self-adhesive foam on the guide tops takes up the last 3 mm.
+for sx in (-1, 1):
+    floor = floor.union(
+        _box(RIB, 2 * CELL_GUIDE_Y, CELL_RIB_H,
+             (CELL_X + sx * (CELL_T + 0.4 + RIB) / 2, 0, FLOOR_T))
+    )
 
 display(floor)
 _export(floor, "terrasse_floor")
 
-print("terrasse body  %.1f cm3   bbox %s" % (
-    body.val().Volume() / 1000.0, body.val().BoundingBox()))
-print("terrasse floor %.1f cm3   bbox %s" % (
-    floor.val().Volume() / 1000.0, floor.val().BoundingBox()))
+print("terrasse body  %.1f cm3   floor %.1f cm3" % (
+    body.val().Volume() / 1000.0, floor.val().Volume() / 1000.0))
 
 
 ## ===========================================================================
