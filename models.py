@@ -217,11 +217,17 @@ body = body.cut(
          (CH_X0 + CH_X / 2, CH_Y0 + CH_Y / 2, Z_FLOOR))
 )
 
-# Cable pass-through in the +Y baffle, for the SHT31's flying lead. Seal it
-# with a dab of silicone on assembly: it is the one path from the chamber into
-# the electronics volume, and it is there for the wire, not for air.
+# Cable pass-through in the +Y baffle, for the SHT31's flying lead. Full
+# height, so the wire can be dropped in from above at any point rather than
+# threaded through a window once everything else is in the way.
+#
+# It is still the one path from the chamber into the electronics volume, and
+# it is there for the wire, not for air -- a full-height slot couples the two
+# far more than a window did. Stuff it with silicone or a scrap of foam once
+# the wire is routed, or the baffle stops doing its job.
 body = body.cut(
-    _box(6.0, 3 * BAFFLE, 4.0, (CH_X0 + 9.0, CH_Y0 + CH_Y + BAFFLE / 2, 50.0))
+    _box(6.0, 3 * BAFFLE, Z_CEIL - Z_FLOOR,
+         (CH_X0 + 9.0, CH_Y0 + CH_Y + BAFFLE / 2, Z_FLOOR))
 )
 
 # Outlet slots, tilted down and outward so nothing runs in. Two walls, each in
@@ -452,8 +458,12 @@ wz_tray = wz_tray.cut(_box(WZ_IN_X, WZ_IN_Y, WZ_IN_H, (0, 0, WZ_FLOOR)))
 # keeps a 145 mm wz_lid from sagging between its four corner screws.
 for bx in (SENS_X1 + WZ_BAF / 2, SDS_X1 + WZ_BAF / 2):
     wz_tray = wz_tray.union(_box(WZ_BAF, WZ_IN_Y, WZ_IN_H, (bx, 0, WZ_FLOOR)))
-    # Notch at floor level, inside the service strip, for the sensor wiring.
-    wz_tray = wz_tray.cut(_box(3 * WZ_BAF, 8.0, 6.0, (bx, WZ_Y1 - SDS_SERVICE / 2, WZ_FLOOR)))
+    # Full-height slot inside the service strip, for the sensor wiring: the
+    # wire drops in from above instead of being threaded through a window.
+    # Seal it after routing -- see the note on the terrasse baffle.
+    wz_tray = wz_tray.cut(
+        _box(3 * WZ_BAF, 8.0, WZ_IN_H, (bx, WZ_Y1 - SDS_SERVICE / 2, WZ_FLOOR))
+    )
 
 # Rib that stops the SDS011 short of the service strip.
 wz_tray = wz_tray.union(_box(SDS_XY, WZ_BAF, 6.0,
@@ -586,7 +596,9 @@ kl_tray = kl_tray.cut(_box(KL_IN_X, KL_IN_Y, KL_IN_H, (0, 0, KL_FLOOR)))
 # there for four wires, not for air.
 kl_tray = kl_tray.union(_box(KL_BAF, KL_IN_Y, KL_IN_H,
                        (KL_SENS_X1 + KL_BAF / 2, 0, KL_FLOOR)))
-kl_tray = kl_tray.cut(_box(3 * KL_BAF, 7.0, 5.0, (KL_SENS_X1 + KL_BAF / 2, 0, KL_FLOOR)))
+kl_tray = kl_tray.cut(
+    _box(3 * KL_BAF, 7.0, KL_IN_H, (KL_SENS_X1 + KL_BAF / 2, 0, KL_FLOOR))
+)
 
 # Sensor chamber: -X end and both long walls, the vents kept inboard of the
 # corner posts so they open onto air rather than onto a post.

@@ -256,6 +256,14 @@ The design follows from it hanging outdoors in the rain:
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
 
+> **Seal the cable slots after wiring.** All three boxes now have their baffle
+> slots running the full height, so a wire can be dropped in from above rather
+> than threaded through a window. That is much easier to build — and it opens
+> the one path between the sensor chamber's air and the electronics', by 5× to
+> 14× depending on the box. The baffle exists to keep the board's heat off the
+> SHT31; a scrap of foam or a bead of silicone in the slot once the wire is
+> routed keeps it doing that.
+
 **Everything mounts to the floor plate and stands up from it.** That is not
 tidiness: the body prints roof-down, so any horizontal feature inside it would
 be printing over thin air. The floor plate prints anchor-down, where ribs,
@@ -328,7 +336,8 @@ Two details carry most of the weight:
 
 A 10 mm service strip runs along +Y past the module for that tube and for the
 sensor wiring, which has to cross the bay to reach the board; both baffles are
-notched at floor level to let it through.
+slotted **full height** inside that strip, so the wire drops in from above
+instead of being threaded through a window once everything else is in place.
 
 Print both parts flat, tray floor down — every slot is a vertical cut in a
 vertical wall, so only the slot tops bridge and nothing needs support.
@@ -360,7 +369,7 @@ inserts the wohnzimmer box uses.
 
 The XIAO drops into a ribbed pocket with its USB-C end toward the wall, and
 the 8.5 mm between baffle and board is deliberate — that is where the jumper
-wire slack goes. The baffle's notch is sized for four wires, not for air.
+wire slack goes. The baffle is slotted full height for the wires.
 
 > The pocket assumes a bare XIAO lying flat on the tray floor. On a carrier
 > board, change `XIAO_X` / `XIAO_Y`.
