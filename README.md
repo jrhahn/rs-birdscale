@@ -300,7 +300,7 @@ Reflashing means taking the floor off — there is deliberately no USB opening.
 
 ### `wohnzimmer_tray` + `wohnzimmer_lid`
 
-A 145 × 89 × 32 mm flat box for the air-quality node. Indoors, so none of it is
+A 145 × 89 × 42 mm box for the air-quality node. Indoors, so none of it is
 about rain; the shape comes from the two constraints
 [`docs/commissioning.md`](docs/commissioning.md) already records — keep the
 SHT31 away from the board, and do not let the SDS011 measure its own
@@ -335,8 +335,13 @@ vertical wall, so only the slot tops bridge and nothing needs support.
 
 | | |
 |---|---|
-| Lid → tray | 4 × M3 × 25, countersunk, into printed Ø2.5 pilots (both indoor boxes) |
+| Lid → tray | 4 × M3, countersunk, into **M3 heat-set inserts** (Ø3.5 holes) |
 | SDS011 intake | ~40 mm of 6 mm silicone tube |
+
+The insert bosses are 8 mm square around a Ø3.5 hole, so 2.25 mm of wall.
+Brass expands as it goes in — check that against the inserts you actually have
+before printing four of them. The `climate` box below keeps a Ø2.5
+self-tapping pilot (`KL_PILOT`) rather than following this one by accident.
 
 > The module envelope is taken as **71 × 70 × 23 mm**. Measure yours before
 > printing — `SDS_XY` is the one number to change if it differs.
@@ -350,7 +355,8 @@ SHT31 on jumper wires, nothing else. Print it twice.
 Small, but the same rule holds. Two compartments with a baffle between them:
 a 22 mm sensor chamber vented on three sides, and the board bay. A node whose
 only job is temperature and humidity has nothing to report if it reports the
-inside of its own box.
+inside of its own box. Fastened with 4 × M3 into printed Ø2.5 pilots — not the
+inserts the wohnzimmer box uses.
 
 The XIAO drops into a ribbed pocket with its USB-C end toward the wall, and
 the 8.5 mm between baffle and board is deliberate — that is where the jumper

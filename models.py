@@ -388,7 +388,7 @@ print("terrasse body  %.1f cm3   floor %.1f cm3" % (
 ## Print both parts flat on the plate, wz_tray floor down. Slots are vertical
 ## cuts in vertical walls, so only their tops bridge -- no support needed.
 
-WZ_X, WZ_Y, WZ_Z = 145.0, 89.0, 32.0
+WZ_X, WZ_Y, WZ_Z = 145.0, 89.0, 42.0
 WZ_WALL = 2.5
 WZ_FLOOR = 3.0
 WZ_LID = 3.0
@@ -422,7 +422,10 @@ WZ_Y1 = WZ_IN_Y / 2               # 42
 SDS_RIB_Y = WZ_Y1 - SDS_SERVICE - WZ_BAF   # 30, module stops here
 
 WZ_POST = 8.0
-WZ_PILOT, WZ_CLEAR, WZ_CSK = 2.5, 3.4, 6.6
+# 3.5 mm for a heat-set insert, not a self-tapping pilot. That leaves 2.25 mm
+# of post wall around it -- brass expands as it goes in, so check it against
+# the insert you actually have before printing four of them.
+WZ_PILOT, WZ_CLEAR, WZ_CSK = 3.5, 3.4, 6.6
 WZ_POST_XY = [(sx * (WZ_IN_X / 2 - WZ_POST / 2), sy * (WZ_IN_Y / 2 - WZ_POST / 2))
               for sx in (-1, 1) for sy in (-1, 1)]
 
@@ -470,14 +473,16 @@ wz_tray = wz_tray.cut(
 )
 
 # Exhaust, -Y wall, the full length of the bay and as far from the intake as
-# the box allows.
-for z in (8.0, 13.0, 18.0):
+# the box allows. The top row sits where it does because the walls grew 10 mm:
+# a chimney is driven by the height between inlet and outlet, so the extra
+# height is worth spending on one more row rather than on dead air.
+for z in (8.0, 13.0, 18.0, 23.0):
     wz_tray = _slots(wz_tray, 4, 17.0, (14.0, 3 * WZ_WALL, SLOT_W),
                   ((SDS_X0 + SDS_X1) / 2, -WZ_Y1, WZ_FLOOR + z), axis="x")
 
 # Sensor chamber: vented on the -X end and both long walls, so it sees room
 # air by convection alone. No fan reaches in here.
-for z in (7.0, 12.0, 17.0):
+for z in (7.0, 12.0, 17.0, 22.0):
     wz_tray = _slots(wz_tray, 2, 34.0, (3 * WZ_WALL, 26.0, SLOT_W),
                   (-WZ_IN_X / 2, 0, WZ_FLOOR + z), axis="y")
     # Kept inboard of the corner posts: a slot cut across one would open the
@@ -559,6 +564,7 @@ KL_TOP = KL_FLOOR + KL_IN_H       # 27
 KL_BAF = 2.0
 KL_SENS_X = 22.0                  # sensor chamber depth
 KL_POST = 8.0
+KL_PILOT = 2.5                    # self-tapping M3, not an insert -- see WZ_PILOT
 KL_POST_XY = [(sx * (KL_IN_X / 2 - KL_POST / 2), sy * (KL_IN_Y / 2 - KL_POST / 2))
               for sx in (-1, 1) for sy in (-1, 1)]
 
@@ -609,7 +615,7 @@ kl_tray = kl_tray.cut(_box(3 * KL_WALL, USB_W, USB_H, (KL_IN_X / 2, 0, KL_FLOOR 
 for (px, py) in KL_POST_XY:
     kl_tray = kl_tray.union(_box(KL_POST, KL_POST, KL_IN_H, (px, py, KL_FLOOR)))
     kl_tray = kl_tray.cut(
-        cq.Workplane("XY").circle(WZ_PILOT / 2).extrude(KL_IN_H)
+        cq.Workplane("XY").circle(KL_PILOT / 2).extrude(KL_IN_H)
         .translate((px, py, KL_FLOOR))
     )
 
