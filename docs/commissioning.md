@@ -173,6 +173,13 @@ SHT31-D only, verified 2026-09-04. Nothing outstanding.
   [`base-platform.md`](base-platform.md) is estimated from datasheets around a
   single measured number (a 269 ms boot). Both radio options recorded there stay
   parked behind that measurement, including the cheap one.
+- **Solar for `terrasse`: panel and charger ordered 2026-09-08**, nothing built.
+  Waveshare 18 V / 10 W panel and a Soldered CN3791 MPPT board (SKU 333136).
+  **The board charges at 3 A as shipped** — `R8` has to come off and be replaced
+  with 1.2 Ω before it is ever connected to a cell. Parts list and reasoning in
+  [`solar.md`](solar.md). It depends on the same missing measurement as the
+  radio options, and on the battery divider actually having been flashed —
+  that divider is the only instrument that can say whether the panel works.
 - **Mains nodes self-heat.** Measured 2026-09-04 on `schlafzimmer`: about 0.9 °C
   at the board, separated from room warming by using the unmoved SCD41 as a
   control. Mount temperature sensors away from the board on any node that

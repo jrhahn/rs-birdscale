@@ -508,6 +508,11 @@ Two consequences for how you build it:
 - **The 5V pad is dead** on battery, which is why the SDS011 is not on this node.
 - **Keep the sensors on 3V3 from the XIAO**, so they go down with it in sleep.
 
+Recharging means opening the box and spending another cycle on a USB port that
+has already failed once out there. Fitting a panel instead — which panel, which
+charger, and why not the XIAO's own — is worked out in [solar.md](solar.md).
+None of it is built.
+
 #### Protection board
 
 The XIAO charges the cell but does **not** protect it: there is no low-voltage

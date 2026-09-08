@@ -193,6 +193,51 @@ keeps the digital domain powered and so does not match the datasheet's headline
 light-sleep number. A multimeter in series with the cell, once asleep and once
 awake, settles both.
 
+There is a third answer that does not touch the budget at all: stop discharging
+the cell on a schedule and let a panel carry it. That is [solar.md](solar.md),
+and it is the only one of the three that also stops the box being opened.
+
+### Measuring it with what you have
+
+The measurement above does not need a lab supply or a current probe, which is
+the usual reason it does not get done.
+
+**What a cheap multimeter cannot do is average.** The node alternates between
+light-sleep polls, brief awake conversions and ~110 mA radio bursts of a few
+seconds, six times an hour. A DMM updates two or three times a second and shows
+something instantaneous; the figure wanted here is an integral, and it will
+never appear on that display. Resolution is not the problem — a 200 mV
+full-scale meter on its 200 mA range has a 1 Ω shunt, so 3.3 mA reads as 3.3 mA
+with 3.3 mV of burden voltage, which is plenty to tell 1.5 mA from 3.3 from 8.
+
+Two ways round it, in order of preference:
+
+**1. Let the node measure itself.** It already publishes `battery_voltage` every
+heartbeat. Charge the cell, run it flat, and read the answer off the broker:
+
+```
+I_avg [mA] = 2000 mAh / (24 h × days)
+```
+
+25 days is 3.3 mA; 12 days is 6.9 mA. This is not a worse substitute for the
+bench measurement, it is a better one — it integrates every burst, every slow
+Wi-Fi join and every visit, at outdoor temperature and the real duty cycle,
+which is exactly the quantity the estimates above are guessing at. It costs
+nothing but time, and it needs `src/battery.rs` on the hardware, which is
+outstanding anyway.
+
+**2. A 1 Ω shunt in the battery lead, read as millivolts.** For the breakdown —
+how much is the amplifier, how much the light-sleep floor — the standing states
+are steady and a meter reads them fine. Use voltage mode across a fixed shunt
+rather than the meter's own current range: no fuse, no range switching, and no
+brownout when the radio comes up. **On the 20 mA range a 110 mA burst puts
+1.1 V across the meter's 10 Ω shunt**, which drops the board to ~2.6 V and
+resets it mid-measurement. Short the leads first and note the offset; these
+meters have one.
+
+The second question — how long a real connect takes — comes off the serial log's
+timestamps and needs no instrument at all.
+
 ### Radio options, parked behind a measurement
 
 Two further battery ideas are on the table. **Neither should be started before

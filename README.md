@@ -462,6 +462,10 @@ is what you build from.
 sensor is expected, not that one is soldered on — that page is where the
 difference is recorded.
 
+☀️ **Solar for the outdoor node — the panel, the charger, and why the obvious
+shelf modules are disqualified — is in [docs/solar.md](docs/solar.md).**
+Designed and costed, not built.
+
 ## Wi-Fi credentials without a rebuild
 
 A board that cannot join the network cannot be told anything over the network,
