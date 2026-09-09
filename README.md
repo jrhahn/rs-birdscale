@@ -207,9 +207,10 @@ until ~2.4 V, far past where a LiPo starts losing capacity for good.
 ## Enclosure
 
 [`models.py`](models.py) is the CadQuery source for the printed parts: three
-enclosures, six pieces. The bending-beam clamps it started as have been
-retired — `git show d0df819:models.py` still has them, and the dimensions the
-`terrasse` anchor mates with are kept as constants in their own right.
+enclosures in six pieces, plus the two bending-beam clamps the bird scale hangs
+from. The clamps the file *started* as were retired in `f858d60` and are not
+these — `git show d0df819:models.py` still has the originals, which put the wire
+hole where the bar puts it rather than on the box's centre line.
 
 ```bash
 nix develop .#cad        # separate shell: OpenCASCADE is ~500 MB, cargo has no use for it
@@ -255,6 +256,28 @@ The design follows from it hanging outdoors in the rain:
 - **The load hangs off a pad on the underside of the floor**, matching the
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
+
+### `terrasse_beam_spacer` + `terrasse_beam_hanger`
+
+The two clamps that pad exists for. The **spacer** bolts up into the floor's
+captive nuts and carries the bar's fixed end; the **hanger** grips the load end
+and reaches back underneath to the middle of the box, where the wire goes.
+
+That reach is the reason both parts exist rather than one. Both ends of the bar
+share the anchor's 15 mm screw pitch, so a single pair of screws cannot fasten
+the box and the bar at once — the spacer offsets the fixed end until the pairs
+clear, which puts the load end 30 mm off centre. A wire hung *there* pulls the
+box out of level, and a box out of level tilts the bar it is weighing with. The
+hanger's arm carries the load back to `x = 0`, the axis the box hangs on.
+
+> **Nothing but the bar may bridge the two clamps.** The arm runs 4 mm clear of
+> the bar above it and 16.7 mm clear of the spacer. If it touches either, the
+> load path goes around the strain gauges and the scale reads a fraction of the
+> weight — or none of it — without any sign that something is wrong.
+
+Because the load is applied 30 mm inboard of the bar's own load point, the cell
+is less sensitive in this fixture than on a bench. That is a constant, so
+`scale_factor` absorbs it — but it has to be **calibrated in the fixture**.
 
 > **Seal the cable slots after wiring.** All three boxes now have their baffle
 > slots running the full height, so a wire can be dropped in from above rather

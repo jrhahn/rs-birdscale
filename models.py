@@ -156,24 +156,39 @@ def _box(l, w, h, at=(0.0, 0.0, 0.0)):
     )
 
 
+def _cyl(d, h, at=(0.0, 0.0, 0.0)):
+    """Axis-aligned cylinder, centred in X/Y, sitting on z=at[2]."""
+    return cq.Workplane("XY").circle(d / 2).extrude(h).translate(at)
+
+
 def _export(shape, stem):
     """Write <stem>.stl and <stem>.step, both reproducible.
 
     OpenCASCADE stamps the wall-clock time into the STEP header, so an
     unchanged model would show up as a diff on every run. The meshes are
     tracked, so that churn is not free -- pin the field instead.
+
+    It also numbers each PRODUCT with a counter that runs across the whole
+    process, so *adding a part* renumbers every part exported after it. That
+    is the same churn wearing a different hat: the four climate/wohnzimmer
+    STEPs moved from `translator 7.9 4` to `... 6` when the two beam clamps
+    were added ahead of them, with byte-identical meshes. Pin it too.
     """
     exporters.export(shape, str(path_save / (stem + ".stl")))
     step = path_save / (stem + ".step")
     exporters.export(shape, str(step))
-    step.write_text(
-        re.sub(
-            r"(FILE_NAME\('[^']*',')[^']*(')",
-            r"\g<1>1970-01-01T00:00:00\g<2>",
-            step.read_text(),
-            count=1,
-        )
+    text = re.sub(
+        r"(FILE_NAME\('[^']*',')[^']*(')",
+        r"\g<1>1970-01-01T00:00:00\g<2>",
+        step.read_text(),
+        count=1,
     )
+    text = re.sub(
+        r"(Open CASCADE STEP translator [0-9.]+) [0-9]+",
+        r"\g<1>",
+        text,
+    )
+    step.write_text(text)
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +371,124 @@ _export(floor, "terrasse_floor")
 
 print("terrasse body  %.1f cm3   floor %.1f cm3" % (
     body.val().Volume() / 1000.0, floor.val().Volume() / 1000.0))
+
+
+## ===========================================================================
+## Terrasse — the bending-beam clamps
+## ===========================================================================
+##
+## Two printed parts, and they are what the floor's anchor pad exists for:
+##
+##   terrasse_beam_spacer   bolts up to the anchor, carries the beam's fixed end
+##   terrasse_beam_hanger   grips the beam's load end, reaches back to the
+##                          centre of the box, and carries the wire
+##
+## An earlier pair of clamps lived in this file and was retired in f858d60;
+## `git show d0df819:models.py` still has them. These are not those. The old
+## ones put the wire hole 27.5 mm out from their own screws, which is where the
+## bar puts it -- off the box's centre line.
+##
+## Three things decide the shape:
+##
+##   a) The bar cannot bolt straight to the anchor. Both of its ends carry the
+##      same 15 mm screw pitch as the anchor, so one pair of screws cannot do
+##      both jobs at once. The spacer offsets the fixed end in X until the two
+##      pairs clear each other, and it is the spacer's height that lets the
+##      free end deflect instead of fouling the floor.
+##   b) The hanger's arm is the whole point of asking for this part. The fixed
+##      end sits at FIXED_X, so the load end lands at FIXED_X + BEAM_SPAN, well
+##      off centre; a wire there hangs the box crooked, and a crooked box tilts
+##      the bar it is weighing with. The arm reaches back *under* the bar to
+##      x = 0, so the feeder hangs on the same axis the box is suspended from.
+##   c) Nothing but the bar may bridge the two clamps. The arm runs ARM_GAP
+##      clear of the bar above it and stops well short of the spacer. Touch
+##      anything and the load path goes around the strain gauges: the cell
+##      reads a fraction of the weight, or none of it, and it does so quietly.
+##
+## The load is applied 30 mm inboard of the bar's own load point, which lowers
+## the sensitivity. That is a constant, so `scale_factor` absorbs it -- but it
+## means the cell must be calibrated *in this fixture*, not on the bench.
+
+# --- the bar, as measured --------------------------------------------------
+BEAM_SPAN = 55.0                 # centre of one screw pair to the other
+BEAM_PITCH = 15.0                # screw pitch within a pair; same as ANCHOR_PITCH
+BEAM_H = 12.7                    # bar section height, sets the arm's headroom
+FIXED_HOLE = 4.3                 # M4 clearance, the end that meets the box
+LOAD_HOLE = 5.3                  # M5 clearance, the end that carries the load
+
+# --- the clamps ------------------------------------------------------------
+CLAMP_W = 12.0                   # both parts, matching the pad's mating face
+CLAMP_EDGE = 5.0                 # material beyond the outermost screw centre
+SPACER_H = 10.0
+HANGER_H = 8.0
+ARM_T, ARM_GAP = 4.0, 4.0        # arm thickness, and its free air under the bar
+CBORE_D, CBORE_H = 8.0, 4.0      # M4/M5 cap-head counterbore
+WIRE_D = 3.4                     # 3 mm wire, plus clearance
+
+# Where the bar's two screw pairs land. FIXED_X is negative so the bar runs
+# back across the box instead of out past its wall: at +25 the load end would
+# sit 87 mm off centre, on a box that is 88 mm wide.
+FIXED_X = -25.0
+LOAD_X = FIXED_X + BEAM_SPAN
+
+PAD_Z = -(FLANGE_H + PAD_H)      # underside of the anchor pad, -6
+SPACER_Z = PAD_Z - SPACER_H      # -16
+BEAM_Z = SPACER_Z - BEAM_H       # underside of the bar, -28.7
+HANGER_Z = BEAM_Z - HANGER_H
+
+_spacer_x0 = min(FIXED_X - BEAM_PITCH / 2, -ANCHOR_PITCH / 2) - CLAMP_EDGE
+_spacer_x1 = max(FIXED_X + BEAM_PITCH / 2, ANCHOR_PITCH / 2) + CLAMP_EDGE
+
+# ---------------------------------------------------------------------------
+# Spacer — anchor above, bar below
+# ---------------------------------------------------------------------------
+spacer = _box(_spacer_x1 - _spacer_x0, CLAMP_W, SPACER_H,
+              ((_spacer_x0 + _spacer_x1) / 2, 0, SPACER_Z))
+
+# Up into the floor's captive nuts: head recessed in the underside.
+for sx in (-1, 1):
+    px = sx * ANCHOR_PITCH / 2
+    spacer = spacer.cut(_cyl(ANCHOR_HOLE, SPACER_H, (px, 0, SPACER_Z)))
+    spacer = spacer.cut(_cyl(CBORE_D, CBORE_H, (px, 0, SPACER_Z)))
+
+# Down into the bar's own threads. Both sit outside the pad's 27 mm footprint,
+# so their heads have somewhere to go.
+for sx in (-1, 1):
+    px = FIXED_X + sx * BEAM_PITCH / 2
+    spacer = spacer.cut(_cyl(FIXED_HOLE, SPACER_H, (px, 0, SPACER_Z)))
+    spacer = spacer.cut(_cyl(CBORE_D, CBORE_H, (px, 0, PAD_Z - CBORE_H)))
+
+display(spacer)
+_export(spacer, "terrasse_beam_spacer")
+
+# ---------------------------------------------------------------------------
+# Hanger — bar above, wire below, arm back to the middle
+# ---------------------------------------------------------------------------
+_hanger_x0 = LOAD_X - BEAM_PITCH / 2 - CLAMP_EDGE
+_hanger_x1 = LOAD_X + BEAM_PITCH / 2 + CLAMP_EDGE
+_arm_x0 = -CBORE_D                # enough material around the wire hole at x=0
+
+hanger = _box(_hanger_x1 - _hanger_x0, CLAMP_W, HANGER_H,
+              ((_hanger_x0 + _hanger_x1) / 2, 0, HANGER_Z))
+hanger = hanger.union(_box(_hanger_x1 - _arm_x0, CLAMP_W, ARM_T,
+                           ((_arm_x0 + _hanger_x1) / 2, 0, HANGER_Z)))
+
+# Up into the bar's load end: head recessed in the underside.
+for sx in (-1, 1):
+    px = LOAD_X + sx * BEAM_PITCH / 2
+    hanger = hanger.cut(_cyl(LOAD_HOLE, HANGER_H, (px, 0, HANGER_Z)))
+    hanger = hanger.cut(_cyl(CBORE_D + 2.0, CBORE_H, (px, 0, HANGER_Z)))
+
+# The wire, on the box's centre line.
+hanger = hanger.cut(_cyl(WIRE_D, ARM_T, (0.0, 0.0, HANGER_Z)))
+
+display(hanger)
+_export(hanger, "terrasse_beam_hanger")
+
+print("terrasse spacer %.1f cm3   hanger %.1f cm3   arm clears bar by %.1f mm" % (
+    spacer.val().Volume() / 1000.0, hanger.val().Volume() / 1000.0,
+    BEAM_Z - (HANGER_Z + ARM_T)))
+
 
 
 ## ===========================================================================
