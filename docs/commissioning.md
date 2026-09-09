@@ -113,8 +113,39 @@ It now sends one SUBSCRIBE carrying both filters. Verified on hardware:
 flash`. That matters here beyond the flag, because **`tare` and `scale_factor`
 go through the same code** — the calibration above could not have landed.
 
-**Four things that cost an evening, so that they do not cost another one:**
+**Five things that cost an evening, so that they do not cost another one:**
 
+- **An address that ACKs while every command NAKs means VCC, not the bus.**
+  Verified 2026-09-09, and it cost most of a night. The log said these two
+  things at once, every cycle, and they read as a contradiction:
+
+  ```
+  WARN - no SHT31-D at 0x44 or 0x45
+  INFO - I²C scan: 0x44 answered
+  ```
+
+  The sensor's **VCC wire was loose**. With the supply open the chip still
+  draws a trickle through the ESD diodes on SDA and SCL, which sit on the bus
+  pull-ups to 3V3 — enough to run the address comparator and return an ACK,
+  nowhere near enough to execute a command or a conversion. The scan writes
+  zero bytes (address only) and passes; the probe writes address plus two
+  command bytes and fails. The fault lives exactly in that gap.
+
+  Everything that looked strange follows from it: the sensor recovered
+  spontaneously at 22:36:53 while the load-cell readings went unsteady — the
+  wire making momentary contact as the node was handled — and only this node
+  was affected, because it is a wiring fault and not a driver one. Swapping the
+  sensor fixed it; the first full reading set in the session arrived at
+  23:29:28 (25.5 °C, 43.1 %).
+
+  **So: when a device answers its address but nothing else, check its supply
+  before suspecting the bus, the pull-ups or the driver.** A dead bus fails the
+  scan too, which is the distinction the scan exists to draw.
+
+  Recorded against a wrong turn, for honesty: this was first blamed on the
+  SHT31's soft reset never being issued (`CMD_SOFT_RESET` was defined and
+  unused). That change shipped anyway — it is correct and datasheet-conformant
+  — but it is **not** what fixed this, and flashing it changed nothing.
 - **The tare baseline lives in RTC RAM** and is taken on the first boot after a
   power cycle. The beam has to be left completely alone for that boot. Taring
   while handling it captured a loaded state and left the node 38k ticks off —
@@ -214,6 +245,16 @@ SHT31-D only, verified 2026-09-04. Nothing outstanding.
   protection is inert for precisely the node that hangs outdoors and cannot be
   reflashed casually. Not the cause of anything so far — nothing is stored on
   `terrasse` — but it is a trap set for later.
+- **Bad and kueche drop temperature occasionally, and it is not Wi-Fi.**
+  Reported from the field 2026-09-09, previously blamed on the network. Those
+  nodes lose a reading now and then while staying connected, which points at
+  `sample()` rather than the boot-time probe: `CONVERSION_MS` was 15 ms against
+  a datasheet maximum of **15.5 ms** for high repeatability, so an occasional
+  read lands before the conversion finishes, is NAKed, and reports a working
+  sensor as absent. Raised to 17 ms, but **only `terrasse` carries the fix so
+  far** — the four mains nodes still run the old image, which makes tonight an
+  unintended A/B test. Flash them once an overnight capture confirms the
+  dropouts stop on the fixed node and continue on the others.
 - **Mains nodes self-heat.** Measured 2026-09-04 on `schlafzimmer`: about 0.9 °C
   at the board, separated from room warming by using the unmoved SCD41 as a
   control. Mount temperature sensors away from the board on any node that
