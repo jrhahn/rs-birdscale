@@ -24,6 +24,7 @@
 //! the bus is wrapped in a [`SharedI2c`] handle that each driver can own.
 
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, mutex::Mutex};
+use embassy_time::{with_timeout, Duration, TimeoutError};
 use embedded_hal_async::i2c::{ErrorType, I2c as I2cTrait, Operation};
 use esp_hal::{
     gpio::GpioPin,
@@ -73,6 +74,19 @@ impl ErrorType for SharedI2c {
     type Error = I2cError;
 }
 
+/// Ceiling on one I²C transaction. Nothing on this bus is slow: the longest
+/// thing any driver asks for is a handful of bytes at 100 kHz, and the sensors'
+/// own conversion waits happen *between* transactions, not inside them. So a
+/// transaction still running after this is not slow, it is stuck.
+///
+/// It exists because the alternative is worse than an error. `transaction` is
+/// awaited with no bound of its own, so a bus wedged by a device holding SDA
+/// low parks the caller for ever: no reading, no log line, and eventually the
+/// system watchdog reboots the node — which is what `rst:0x7 (TG0WDT_SYS_RST)`
+/// in the outdoor node's log was. A timeout turns that into a failed reading
+/// the drivers already know how to report.
+pub const I2C_TIMEOUT_MS: u64 = 100;
+
 impl I2cTrait for SharedI2c {
     async fn transaction(
         &mut self,
@@ -82,7 +96,20 @@ impl I2cTrait for SharedI2c {
         // Spell the trait out: esp-hal's `I2c` also has an inherent
         // `transaction` taking its own `Operation` type, which would shadow this.
         let mut bus = self.0.lock().await;
-        I2cTrait::transaction(&mut *bus, address, operations).await
+        match with_timeout(
+            Duration::from_millis(I2C_TIMEOUT_MS),
+            I2cTrait::transaction(&mut *bus, address, operations),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(TimeoutError) => {
+                warn!(
+                    "I²C transaction to 0x{address:02X} timed out after {I2C_TIMEOUT_MS} ms;                      treating it as a bus fault rather than waiting for the watchdog"
+                );
+                Err(I2cError::TimeOut)
+            }
+        }
     }
 }
 
