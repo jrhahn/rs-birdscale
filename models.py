@@ -65,13 +65,7 @@ except NameError:
 ## gets the smooth plate-side surface.
 
 # --- envelope -------------------------------------------------------------
-# 94 rather than 88 in X, and the 6 mm is the insert bore's fault. A 5 mm bore
-# needs an 11 mm post to keep 3 mm of wall, which moves the corner posts 3 mm
-# further in at each end -- and the battery lane and the HX711 pocket had
-# exactly no slack between them before that. The alternative was a 9 mm post
-# with 2 mm of wall, which is the thin-wall split this box's own note warns
-# about, so the millimetres came out of the envelope instead.
-ENV_X, ENV_Y, ENV_Z = 94.0, 78.0, 60.0   # length, width, height
+ENV_X, ENV_Y, ENV_Z = 88.0, 78.0, 60.0   # length, width, height
 
 WALL = 2.0        # side and roof wall
 FLOOR_T = 3.0     # floor plate
@@ -106,19 +100,25 @@ VENT_X_W = 7.0                   # -X wall, likewise
 VENT_Z = [38.0, 44.0, 50.0]
 VENT_TILT = 30.0                 # degrees, sloping down and outward
 
-# --- floor-to-body screws, into heat-set inserts --------------------------
-# 5 mm bore, so an 11 mm post leaves 3 mm of wall around it. Brass expands as
-# it goes in and a thin post splits; the old 8 mm post was sized for a 2.5 mm
-# self-tapping pilot and would have left 1.5 mm.
+# --- floor-to-body screws, into M3 heat-set inserts -----------------------
+# 4 mm bore in a 9 mm post: 2.5 mm of wall, which is thinner than one would
+# choose and is what the already-printed floor plate allows.
 #
-# A 5 mm bore is M4 territory (M3 inserts want about 4 mm), so the floor's
-# clearance and countersink are M4 to match. If these turn out to be M3
-# inserts, SCREW_CLEAR / SCREW_CSK go back to 3.4 / 6.6 -- that is the whole
-# change, and getting it wrong is a screw that will not pass its own hole.
-BOSS_D, BOSS_PILOT, BOSS_H = 11.0, 5.0, 14.0
-BOSS_XY = [(sx * (IN_X / 2 - BOSS_D / 2), sy * (IN_Y / 2 - BOSS_D / 2))
+# The screw positions are not free. They come from `IN_X/2 - 4` and
+# `IN_Y/2 - 4`, i.e. the 8 mm post this box shipped with, and the floor plate
+# in hand has its countersinks there. Growing the post therefore has to happen
+# *around* a fixed hole, and it runs into two features of that same plate: the
+# cell reaches x = 31 and the battery guides reach y = +-26. Nine millimetres
+# leaves 0.5 mm to both. Ten would not fit.
+#
+# So brass into 2.5 mm of wall. Warm the insert properly and do not lean on it;
+# if one splits, the way out is a reprinted floor with the holes further in,
+# which buys 3.5 mm.
+BOSS_D, BOSS_PILOT, BOSS_H = 9.0, 4.0, 14.0
+# Deliberately not derived from BOSS_D: the printed plate fixes these.
+BOSS_XY = [(sx * (IN_X / 2 - 4.0), sy * (IN_Y / 2 - 4.0))
            for sx in (-1, 1) for sy in (-1, 1)]
-SCREW_CLEAR, SCREW_CSK = 4.5, 8.5
+SCREW_CLEAR, SCREW_CSK = 3.4, 6.6
 
 # --- bending-beam anchor (M4) ---------------------------------------------
 # Interface to the bending-beam clamp. The clamp's own model lived in this
@@ -148,9 +148,7 @@ DRAIN_D, DRAIN_XY = 3.0, (-34.0, 0.0)    # condensate drain
 # A symmetric second rail would have covered the two nut pockets, and the
 # nuts have to drop in from above.
 ESP = (32.0, 41.0, 37.0, 1.0, -14.5, DECK_Z, (-15.5,))
-# Shifted +4 mm in X from where it was: the insert posts are 3 mm wider each,
-# and its -X rib fouled the +Y one.
-HX711 = (42.0, 26.0, 32.0, -5.0, 21.0, DECK_Z, (-9.0, 9.0))
+HX711 = (42.0, 26.0, 32.0, -9.0, 21.0, DECK_Z, (-9.0, 9.0))
 RIB, RAIL_W = 2.0, 4.0           # pocket rib, support rail
 RIB_H = 6.0                      # how far a rib stands above the rail
 
@@ -160,7 +158,7 @@ RIB_H = 6.0                      # how far a rib stands above the rail
 CELL_T, CELL_L, CELL_H = 12.0, 67.0, 52.0
 CELL_X = 25.0                    # lane centre; cell spans x = 19 .. 31
 CELL_RIB_H = 30.0                # side guides, tall enough to hold it upright
-CELL_GUIDE_Y = 23.0              # ... but stopping short of the corner posts
+CELL_GUIDE_Y = 26.0              # ... but stopping short of the corner posts
 
 
 def _box(l, w, h, at=(0.0, 0.0, 0.0)):
@@ -272,6 +270,15 @@ for (px, py) in BOSS_XY:
         .translate((px, py, Z_FLOOR))
     )
 
+# Relief where the printed floor plate's HX711 rib passes the -X/+Y post.
+#
+# The post is 9 mm so the insert gets 2.5 mm of wall, and that is 0.5 mm more
+# than the plate leaves at this one spot. Taking it back here rather than
+# shrinking the post keeps the material where the brass goes: the rib only has
+# to slide past, the wall has to survive an insert being melted into it.
+rib_x = HX711[3] - (HX711[0] + RIB) / 2
+body = body.cut(_box(RIB + 0.6, 14.0, BOSS_H, (rib_x, 30.0, Z_FLOOR)))
+
 # The roof edge gets a chamfer, not a round. This part prints roof-down, so
 # that edge is the first layer: a fillet there starts as a knife edge with a
 # horizontal tangent and each layer steps outward over air. A 45 degree break
@@ -340,10 +347,7 @@ for sy in (-33.0, -30.5, -28.0):
 # Card slot for the SHT31 breakout, standing on edge across the chamber's
 # other leg. Held clear of the outer wall: it belongs to the floor, the wall
 # to the body, and they have to come apart.
-# One constant for both, and 14.5 rather than 12: the insert posts reach 3 mm
-# further in than the old self-tapping ones, to y = -24, and the holder started
-# at -26.
-CARD_XY = (CH_X0 + 9.0, CH_Y0 + 14.5)
+CARD_XY = (CH_X0 + 9.0, CH_Y0 + 12.0)
 floor = floor.union(_box(16.0, 6.0, 6.0, (CARD_XY[0], CARD_XY[1], FLOOR_T)))
 floor = floor.cut(_box(20.0, 2.0, 5.0, (CARD_XY[0], CARD_XY[1], FLOOR_T + 1.5)))
 

@@ -225,7 +225,7 @@ slice, `.step` to open in CAD.
 
 ### `terrasse_body` + `terrasse_floor`
 
-A **94 × 78 × 60 mm** box for the bird scale, in two parts. The size is not a
+An **88 × 78 × 60 mm** box for the bird scale, in two parts. The size is not a
 choice — it comes from the measured envelopes, plugs included:
 
 | | | | |
@@ -236,8 +236,8 @@ choice — it comes from the measured envelopes, plugs included:
 That is 128 cm³ with clearance. The first version of this box had a 98 cm³
 interior, so no amount of rearranging would have done it; a grid packing search
 puts the smallest interior that takes all four at 76 × 66 × 52, and only with
-everything stood on end. This one is 86 × 70 × 55, which leaves room for the
-mounts themselves — and 6 mm of that width is the insert bore's fault, below.
+everything stood on end. This one is 80 × 70 × 55, which leaves room for the
+mounts themselves.
 
 The design follows from it hanging outdoors in the rain:
 
@@ -258,15 +258,20 @@ The design follows from it hanging outdoors in the rain:
   the sensor's air — about 0.9 °C on the bedroom node. A box that cannot be
   assembled is worse than one that reads half a degree warm, but keep the SHT31
   in that corner rather than beside the board, or the loss compounds.
-- **The floor screws go into M4 heat-set inserts**, Ø5 bores in 11 mm posts,
-  which keeps 3 mm of wall around them. That is where the extra 6 mm of width
-  went: 11 mm posts pull each corner 3 mm further in, and the battery lane and
-  the HX711 pocket had no slack between them — the checks caught it as a
-  238 mm³ overlap between the cell and a post. A 9 mm post would have left
-  2 mm of wall, which is the thin-wall split the living-room box's own note
-  warns about, so the millimetres came out of the envelope instead. A Ø5 bore
-  is M4 territory (M3 inserts want about 4 mm); if yours are M3, `SCREW_CLEAR`
-  and `SCREW_CSK` go back to 3.4 / 6.6.
+- **The floor screws go into M3 heat-set inserts**, Ø4 bores in 9 mm posts,
+  which leaves 2.5 mm of wall — thinner than one would choose, and what the
+  already-printed floor plate allows.
+
+  The screw positions are not free: they are where the 8 mm post this box
+  shipped with put them, and the plate in hand has its countersinks there. So
+  the post has to grow *around* a fixed hole, and it meets two features of that
+  same plate — the cell reaches x = 31 and the battery guides reach y = ±26.
+  Nine millimetres leaves 0.5 mm to both; ten does not fit. The plate's HX711
+  rib still fouled one post by 0.5 mm, so that post is relieved there rather
+  than shrunk: the rib only has to slide past, the wall has to survive brass
+  being melted into it. Warm the inserts properly and do not lean on them; if
+  one splits, the way out is a reprinted floor with the holes further in, which
+  buys 3.5 mm.
 - **The load hangs off a pad on the underside of the floor**, matching the
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
