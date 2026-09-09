@@ -110,7 +110,7 @@ Worth understanding before relying on that path, because **`tare` and
 `scale_factor` go through the same code** and the calibration above depends on
 them landing.
 
-**Three things that cost an evening, so that they do not cost another one:**
+**Four things that cost an evening, so that they do not cost another one:**
 
 - **The tare baseline lives in RTC RAM** and is taken on the first boot after a
   power cycle. The beam has to be left completely alone for that boot. Taring
@@ -126,6 +126,25 @@ them landing.
   2026-09-06. Flashing still needs the boot window right after plugging in, or
   the BOOT/RESET hold, and `espflash monitor` is still the wrong tool — see
   [`FLASHING.md`](../FLASHING.md).
+- **Never debug this node on USB with the cell disconnected.** Verified
+  2026-09-09, after an evening spent on the wrong three theories. The LiPo is
+  what buffers the radio's TX bursts; without it the board browns out and
+  resets at the first transmission, and the failure is silent in the worst way:
+  the serial log ends on `Wi-Fi modem sleep: max`, which `main.rs` prints
+  immediately *before* `connect_async().await`. So output stops at the first RF
+  current peak, the USB port vanishes, and the board reboots — with **no**
+  `Connected to Wi-Fi` and, crucially, **no `connect to … failed (attempt N)`
+  either**. Nothing is failing to join; it never gets that far. The SHT31-D
+  fails the same way at the same time, logging the contradictory pair
+  `no SHT31-D at 0x44 or 0x45` and `I²C scan: 0x44 answered`. Reattach the cell
+  and both come back at once: 4.09 V, 24.5 °C, 38.9 %.
+
+  Two hours went into the credentials before that. They were never the problem
+  — the boot banner reads `wifi: 'wifi_42_ext' (built in)`, `.env` agrees, the
+  network scans at signal 84 on 2.4 GHz, and nothing is stored in flash, so
+  `clear` is a no-op. That banner is printed before the console window and is
+  almost impossible to catch, since the C3 discards serial output no host is
+  reading yet; it took five cold boots to see it once.
 - **Discovery is announced once per *power cycle*, not per boot.**
   `FLAG_DISCOVERY` lives in RTC RAM, which survives deep sleep and even a
   reflash. After the retained `homeassistant/` topics were cleared by hand the
@@ -180,6 +199,17 @@ SHT31-D only, verified 2026-09-04. Nothing outstanding.
   [`solar.md`](solar.md). It depends on the same missing measurement as the
   radio options, and on the battery divider actually having been flashed —
   that divider is the only instrument that can say whether the panel works.
+- **The stored-credential fallback cannot fire on a battery node.**
+  `wifi::FALLBACK_AFTER` is meant to set aside stored credentials after three
+  consecutive refusals and fall back to the built-in pair, so a typo at the
+  console cannot strand a board. But `refusals` in `main.rs` is a task-local,
+  and its comment says it is deliberately *not* in RTC RAM: *"a power cycle
+  should give them another try"*. That reasoning holds for a mains node. A
+  battery node cold-boots every couple of seconds, so every wake is a new run
+  with `refusals = 0` and the threshold of three is never reached. The
+  protection is inert for precisely the node that hangs outdoors and cannot be
+  reflashed casually. Not the cause of anything so far — nothing is stored on
+  `terrasse` — but it is a trap set for later.
 - **Mains nodes self-heat.** Measured 2026-09-04 on `schlafzimmer`: about 0.9 °C
   at the board, separated from room warming by using the unmoved SCD41 as a
   control. Mount temperature sensors away from the board on any node that
