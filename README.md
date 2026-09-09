@@ -260,234 +260,35 @@ The design follows from it hanging outdoors in the rain:
 ### `terrasse_beam_spacer` + `terrasse_beam_hanger`
 
 The two clamps that pad exists for. The **spacer** bolts up into the floor's
-captive nuts and carries the bar's fixed end; the **hanger** grips the load end
-and reaches back underneath to the middle of the box, where the wire goes.
+captive nuts and carries the bar's fixed end; the **hanger** grips the load end,
+and the wire leaves from its far end.
 
-That reach is the reason both parts exist rather than one. Both ends of the bar
-share the anchor's 15 mm screw pitch, so a single pair of screws cannot fasten
-the box and the bar at once — the spacer offsets the fixed end until the pairs
-clear, which puts the load end 30 mm off centre. A wire hung *there* pulls the
-box out of level, and a box out of level tilts the bar it is weighing with. The
-hanger's arm carries the load back to `x = 0`, the axis the box hangs on.
+Two parts rather than one, because both ends of the bar share the anchor's 15 mm
+screw pitch — a single pair of screws cannot fasten the box and the bar at once.
+The spacer offsets the fixed end until the pairs clear. `BEAM_DIR` decides which
+way the bar runs from there; flipping its sign mirrors the whole assembly, and
+since every feature sits on `y = 0`, an already-printed part just turns round.
 
-> **Nothing but the bar may bridge the two clamps.** The arm runs 4 mm clear of
-> the bar above it and 16.7 mm clear of the spacer. If it touches either, the
-> load path goes around the strain gauges and the scale reads a fraction of the
-> weight — or none of it — without any sign that something is wrong.
+The hanger is 80 mm, the bar's own length, with the M5 bolts at one end and the
+wire hole at the other — **61.5 mm apart**. That is a cantilever in the load
+path, and what bends does not spring back exactly; the hysteresis lands in the
+weight. The spine is therefore the deep section, 14 mm, since stiffness goes
+with depth cubed. It is damage limitation rather than a fix.
 
-Because the load is applied 30 mm inboard of the bar's own load point, the cell
-is less sensitive in this fixture than on a bench. That is a constant, so
-`scale_factor` absorbs it — but it has to be **calibrated in the fixture**.
+> **Nothing but the bar may bridge the two clamps.** Only the hanger's pad
+> touches the bar; the spine runs 4 mm clear of it along its whole length and
+> 16.7 mm clear of the spacer. If anything touches, the load path goes around
+> the strain gauges and the scale reads a fraction of the weight — or none of
+> it — without any sign that something is wrong.
 
-> **Seal the cable slots after wiring.** All three boxes now have their baffle
-> slots running the full height, so a wire can be dropped in from above rather
-> than threaded through a window. That is much easier to build — and it opens
-> the one path between the sensor chamber's air and the electronics', by 5× to
-> 14× depending on the box. The baffle exists to keep the board's heat off the
-> SHT31; a scrap of foam or a bead of silicone in the slot once the wire is
-> routed keeps it doing that.
+**Printing.** The pad reaches down to the rail's underside rather than standing
+proud of it, so there is one flat face across all 80 mm and a single 4 mm step
+on top — a step *up*, overhanging nothing. The only downward faces off the bed
+are the two counterbore ceilings, 112.9 mm² of bridge over a 5.3 mm hole. No
+support. The pad is 18 mm thick as a result, so the bolts want to be **M5 × 16**.
 
-**Everything mounts to the floor plate and stands up from it.** That is not
-tidiness: the body prints roof-down, so any horizontal feature inside it would
-be printing over thin air. The floor plate prints anchor-down, where ribs,
-rails and columns are all free.
-
-So the boards sit on **rails at 8 mm**, which is exactly the height of the
-anchor's nut boss — that puts the anchor *underneath* the ESP instead of
-fighting it for floor area, and the ESP's 41 mm depth is the one footprint that
-cannot avoid the centre. The ESP therefore gets one rail at its far end and the
-boss as its second support; a symmetric pair would have covered the two nut
-pockets, and the nuts have to drop in from above.
-
-The two boards take 41 + 26 mm of the 70 mm available, so there is room for
-**one** rib between them — the box walls stop them on the other side.
-
-The **battery stands on edge** in a lane between two guides, doubling as the
-divider between the boards and the +X wall. No cable tie: at 52 mm tall a tie
-would have to pass over its top, and on the −X side that lands under the ESP.
-It is captured on all four sides instead — guides in X, box walls in Y (a
-65 mm cell in a 70 mm interior), floor below. A strip of self-adhesive foam on
-the guide tops takes up the last 3 mm if it rattles.
-
-The vertical corners are rounded (R3). The **roof edge gets a 45° chamfer
-rather than a round**, and that is a deliberate trade: this part prints
-roof-down, so that edge is the *first layer*. A fillet there starts as a knife
-edge with a horizontal tangent and every layer steps outward over air. The
-chamfer softens the same edge, prints cleanly, and leaves the eave's underside
-sharp — which is the edge that actually sheds the water.
-
-Print the **body with the roof on the build plate** (opening up) and the
-**floor with the anchor pad down**, which leaves the nut pockets opening
-upward. PETG or ASA — PLA creeps under a constant hanging load and yellows in
-UV.
-
-| | |
-|---|---|
-| Floor → body | 4 × M3 × 16, countersunk, into printed Ø2.5 pilots |
-| Clamp → anchor | 2 × M4 × 25 + 2 × M4 nuts (check against your clamp) |
-| Suspension | ~3 mm cord through both Ø4 tabs, as a bail |
-
-Reflashing means taking the floor off — there is deliberately no USB opening.
-
-### `wohnzimmer_tray` + `wohnzimmer_lid`
-
-A 145 × 89 × 42 mm box for the air-quality node. Indoors, so none of it is
-about rain; the shape comes from the two constraints
-[`docs/commissioning.md`](docs/commissioning.md) already records — keep the
-SHT31 away from the board, and do not let the SDS011 measure its own
-enclosure.
-
-Three compartments in a row, split by full-height baffles that double as the
-lid's mid-span support:
-
-| | |
-|---|---|
-| −X | **Sensor chamber**, 18 mm. SHT31 + SCD41, vented on three sides, 104 mm from the board. Both want room air; neither runs a fan. |
-| | **SDS011 bay**, 73.5 mm. A drop-in pocket. |
-| +X | **Board bay**, 44.5 mm. Fitted pocket for the 33 × 55 × 20 board, cable out through the end wall. |
-
-Two details carry most of the weight:
-
-- **The intake is tubed.** A stub in the +Y wall mimics the SDS011's own
-  nozzle; a short silicone tube between the two makes the fan draw room air.
-  Without it the module sits in a box slowly re-measuring what it just
-  measured. The exhaust leaves through the −Y wall, 84 mm away on the far side
-  of the module — as far apart as the box allows.
-- **The bay is square, 73.5 × 73.5.** The module is 71 × 70, so the pocket
-  costs 1.5 mm of nothing and buys all four orientations. Which edge carries
-  the intake nozzle differs between units, and the tube has to reach the stub.
-
-A 10 mm service strip runs along +Y past the module for that tube and for the
-sensor wiring, which has to cross the bay to reach the board; both baffles are
-slotted **full height** inside that strip, so the wire drops in from above
-instead of being threaded through a window once everything else is in place.
-
-Print both parts flat, tray floor down — every slot is a vertical cut in a
-vertical wall, so only the slot tops bridge and nothing needs support.
-
-| | |
-|---|---|
-| Lid → tray | 4 × M3, countersunk, into **M3 heat-set inserts** (Ø3.5 holes) |
-| SDS011 intake | ~40 mm of 6 mm silicone tube |
-
-The insert bosses are 8 mm square around a Ø3.5 hole, so 2.25 mm of wall.
-Brass expands as it goes in — check that against the inserts you actually have
-before printing four of them. The `climate` box below keeps a Ø2.5
-self-tapping pilot (`KL_PILOT`) rather than following this one by accident.
-
-> The module envelope is taken as **71 × 70 × 23 mm**. Measure yours before
-> printing — `SDS_XY` is the one number to change if it differs.
-
-### `climate_tray` + `climate_lid`
-
-65 × 39 × 30 mm, and it serves **both `kueche` and `bad`** — `node.rs` calls
-the kitchen "the same build as `BAD`", and the contents match: a XIAO and an
-SHT31 on jumper wires, nothing else. Print it twice.
-
-Small, but the same rule holds. Two compartments with a baffle between them:
-a 22 mm sensor chamber vented on three sides, and the board bay. A node whose
-only job is temperature and humidity has nothing to report if it reports the
-inside of its own box. Fastened with 4 × M3 into printed Ø2.5 pilots — not the
-inserts the wohnzimmer box uses.
-
-The XIAO drops into a ribbed pocket with its USB-C end toward the wall, and
-the 8.5 mm between baffle and board is deliberate — that is where the jumper
-wire slack goes. The baffle is slotted full height for the wires.
-
-> The pocket assumes a bare XIAO lying flat on the tray floor. On a carrier
-> board, change `XIAO_X` / `XIAO_Y`.
-
-### Rounding
-
-Vertical corners are R3 on all three housings; the two lids also get their top
-edge rounded. Lids print underside-down, so that round closes *inward* layer by
-layer and costs nothing — unlike the terrasse roof, which is why that one is
-chamfered instead. `CORNER_R` and `TOP_BREAK` set both.
-
-## Firmware architecture
-
-| Concern            | Implementation                                                    |
-| ------------------ | ----------------------------------------------------------------- |
-| HAL / async runtime| `esp-hal` 0.22 + `esp-hal-embassy`, executor driven by **TIMG0**  |
-| Node selection     | [`src/node.rs`](src/node.rs) — sensor set, identity, topics and power profile per node, chosen by `NODE=` at build time |
-| Sensor abstraction | [`src/sensors/`](src/sensors) — HAL-agnostic `Sensor` trait (`measure()` + `descriptors()`), drivers generic over `embedded-hal-async` / `embedded-io-async` |
-| Board wiring       | [`src/platform.rs`](src/platform.rs) — concrete buses; one shared I²C handle so both I²C drivers can own their bus |
-| Load-cell driver   | [`src/hx711.rs`](src/hx711.rs) — async `wait_ready()` with timeout, blocking 24+N clock read, two's-complement sign-extend to `i32`; generic over the `embedded-hal` pin traits, so the bit protocol is tested against fake pins |
-| Temperature driver | [`src/ds18b20.rs`](src/ds18b20.rs) — bit-bang 1-Wire on an open-drain pin, blocking time slots, async 750 ms conversion wait, CRC-checked scratchpad |
-| Battery sense      | [`src/battery.rs`](src/battery.rs) — ADC1 one-shots with eFuse curve calibration (so readings arrive in mV), averaged, divider undone in fixed point; an implausibly low reading is reported as the wiring fault it is rather than published |
-| SHT31-D / SCD41    | [`sht31.rs`](src/sensors/sht31.rs) / [`scd41.rs`](src/sensors/scd41.rs) — single-shot and periodic I²C reads, every word CRC-checked (Sensirion CRC-8), fixed-point conversions |
-| SDS011             | [`sds011.rs`](src/sensors/sds011.rs) — 10-byte UART frames with checksum + resync, fan woken only for the measurement and parked again on every exit path, warm-up ended by the readings settling rather than by a fixed wait |
-| HA discovery       | [`src/discovery.rs`](src/discovery.rs) — retained `homeassistant/sensor/<node>/<key>/config` per reading, all entities grouped under one device |
-| Presence / tare    | [`src/presence.rs`](src/presence.rs) — the arrival/departure/creep decision and the settled-weight median, host-tested; baseline + presence edge persisted in [`src/state.rs`](src/state.rs) (RTC RAM) |
-| Config / calibration | [`src/config.rs`](src/config.rs) — calibration + tuning in a CRC-guarded flash blob (`esp-storage`), loaded at boot, updated from retained MQTT while online |
-| Wi-Fi + TCP/IP     | `esp-wifi` (STA + DHCP) + `embassy-net`, background `net_task`     |
-| MQTT               | `rust-mqtt` (embedded-async, MQTT v5) over an `embassy-net` socket |
-| Power management   | `esp_hal::rtc_cntl` RTC-timer sleep — light sleep between idle polls (one cold boot per publish, not per poll), HX711 powered down in between, awake for the length of a visit, `active_interval` only for a load that outstays it |
-
-The HX711 read cycle is deliberately a short **blocking** critical section:
-the datasheet forbids a single clock-high pulse longer than 60 µs (it would put
-the chip into power-down), so the tight loop must not yield to the executor.
-Waiting *for* a conversion, by contrast, is fully async so Wi-Fi and timers keep
-running.
-
-## Toolchain
-
-The XIAO ESP32-C3 is RISC-V, so it uses the standard bare-metal target — no
-Xtensa/`espup` toolchain required.
-
-```bash
-rustup toolchain install 1.83.0
-rustup target add riscv32imc-unknown-none-elf --toolchain 1.83.0
-cargo install espflash          # for flashing/monitoring over USB
-```
-
-> **Toolchain pin:** [`rust-toolchain.toml`](rust-toolchain.toml) pins Rust to
-> **1.83.0**. Rust ≥ 1.84 correctly makes `c_char` unsigned on RISC-V, which is
-> incompatible with the pre-generated C bindings in `esp-wifi` 0.11. Newer
-> `esp-hal` (1.x) lifts this, but the issue targets the 0.22 line.
-
-## Build & flash
-
-Credentials **and** the broker address are baked in at compile time from env
-vars (see [`.env.example`](.env.example)): `SSID`, `PASSWORD`, optional
-`MQTT_USER` / `MQTT_PASSWORD`, and `MQTT_BROKER` (a private LAN IP, not a
-secret, kept out of source). `MQTT_PORT` is still a constant in
-[`src/main.rs`](src/main.rs).
-
-The Wi-Fi credentials are only the *default*: a board can be told different ones
-over its serial console and will remember them — see
-[below](#wi-fi-credentials-without-a-rebuild).
-
-```bash
-# Build only (defaults to NODE=terrasse, the bird scale)
-cargo build --release
-
-# Flash + serial monitor over the XIAO's USB-C (device on /dev/ttyACM0)
-SSID="MyNetwork" PASSWORD="s3cret" cargo run --release
-
-# Flash one of the other nodes
-NODE=kueche SSID="MyNetwork" PASSWORD="s3cret" cargo run --release
-```
-
-Point it at your broker by setting `MQTT_BROKER` in `.env` (or on the command
-line); adjust `MQTT_PORT` in `src/main.rs` if it isn't the default 1883.
-
-📖 **Full build/flash walkthrough — including flashing with a Raspberry Pi Pico
-probe — is in [FLASHING.md](FLASHING.md).**
-
-🔌 **Complete wiring for each node — which sensor goes on which pad, per
-`NODE=`, with the pull-ups and supply notes — is in
-[docs/wiring.md](docs/wiring.md).** The pin map above is the summary; that page
-is what you build from.
-
-**What is actually built, and what still needs doing to it, is in
-[docs/commissioning.md](docs/commissioning.md).** A slot being enabled says a
-sensor is expected, not that one is soldered on — that page is where the
-difference is recorded.
-
-☀️ **Solar for the outdoor node — the panel, the charger, and why the obvious
-shelf modules are disqualified — is in [docs/solar.md](docs/solar.md).**
-Designed and costed, not built.
+Calibrate in the fixture: `scale_factor` is what absorbs whatever the mounting
+does to the sensitivity.
 
 ## Wi-Fi credentials without a rebuild
 

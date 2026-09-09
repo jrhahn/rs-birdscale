@@ -395,21 +395,32 @@ print("terrasse body  %.1f cm3   floor %.1f cm3" % (
 ##      both jobs at once. The spacer offsets the fixed end in X until the two
 ##      pairs clear each other, and it is the spacer's height that lets the
 ##      free end deflect instead of fouling the floor.
-##   b) The hanger's arm is the whole point of asking for this part. The fixed
-##      end sits at FIXED_X, so the load end lands at FIXED_X + BEAM_SPAN, well
-##      off centre; a wire there hangs the box crooked, and a crooked box tilts
-##      the bar it is weighing with. The arm reaches back *under* the bar to
-##      x = 0, so the feeder hangs on the same axis the box is suspended from.
-##   c) Nothing but the bar may bridge the two clamps. The arm runs ARM_GAP
-##      clear of the bar above it and stops well short of the spacer. Touch
-##      anything and the load path goes around the strain gauges: the cell
-##      reads a fraction of the weight, or none of it, and it does so quietly.
+##   b) Bolts at one end of the hanger, the wire at the other. That is the
+##      arrangement asked for, and it puts WIRE_X 61.5 mm from the bolts -- a
+##      real cantilever in the load path. Anything that bends does not spring
+##      back exactly, and that hysteresis lands straight in the weight, so the
+##      spine is the deep section (RAIL_T, 14 mm) rather than the pad. Stiffness
+##      goes with depth cubed, which is damage limitation, not a substitute for
+##      having no lever at all. A version with the wire between the bolts had
+##      none; it was rejected because the wire has to leave from the far end.
+##   c) Nothing but the bar may bridge the two clamps. Only the hanger's pad
+##      touches the bar; the spine runs RAIL_GAP clear of it for its whole
+##      length. Touch anything and the load path goes around the strain gauges:
+##      the cell reads a fraction of the weight, or none of it, and it does so
+##      quietly.
 ##
-## The load is applied 30 mm inboard of the bar's own load point, which lowers
-## the sensitivity. That is a constant, so `scale_factor` absorbs it -- but it
-## means the cell must be calibrated *in this fixture*, not on the bench.
+## It also has to be printable, which decides the section. The pad reaches down
+## to the rail's underside instead of sitting proud of it, so the part has one
+## flat face across all 80 mm and a single 4 mm step on top -- a step *up*,
+## overhanging nothing. The only downward faces off the bed are the two
+## counterbore ceilings, 112.9 mm² of bridge over a 5.3 mm hole, which is what
+## every counterbore printed face-down does. No support anywhere.
+##
+## The pad ends up 18 mm thick, so the M5 has to span BOLT_BEARING of pad plus
+## the bar's thread: M5x16, not M5x12.
 
 # --- the bar, as measured --------------------------------------------------
+BEAM_L = 80.0                    # the bar's overall length
 BEAM_SPAN = 55.0                 # centre of one screw pair to the other
 BEAM_PITCH = 15.0                # screw pitch within a pair; same as ANCHOR_PITCH
 BEAM_H = 12.7                    # bar section height, sets the arm's headroom
@@ -417,24 +428,46 @@ FIXED_HOLE = 4.3                 # M4 clearance, the end that meets the box
 LOAD_HOLE = 5.3                  # M5 clearance, the end that carries the load
 
 # --- the clamps ------------------------------------------------------------
-CLAMP_W = 12.0                   # both parts, matching the pad's mating face
+CLAMP_W = 12.0                   # spacer, matching the pad's mating face
 CLAMP_EDGE = 5.0                 # material beyond the outermost screw centre
 SPACER_H = 10.0
-HANGER_H = 8.0
-ARM_T, ARM_GAP = 4.0, 4.0        # arm thickness, and its free air under the bar
+HANGER_W = 18.0                  # hanger is wider: the M5 counterbores need it
+BOLT_BEARING = 8.0               # pad material left above the counterbore
+RAIL_T, RAIL_GAP = 14.0, 4.0     # spine thickness, and its free air under the bar
+WIRE_EDGE = 6.0                  # material beyond the wire hole at the free end
 CBORE_D, CBORE_H = 8.0, 4.0      # M4/M5 cap-head counterbore
 WIRE_D = 3.4                     # 3 mm wire, plus clearance
 
-# Where the bar's two screw pairs land. FIXED_X is negative so the bar runs
-# back across the box instead of out past its wall: at +25 the load end would
-# sit 87 mm off centre, on a box that is 88 mm wide.
-FIXED_X = -25.0
-LOAD_X = FIXED_X + BEAM_SPAN
+# Where the bar's two screw pairs land. The fixed end is offset from the anchor
+# so the two screw pairs clear each other; BEAM_DIR then says which way the bar
+# runs from there, and everything below follows it. Flip the sign to mirror the
+# whole assembly -- it is the only edit that takes.
+#
+# |FIXED_X| stays at 25 either way: the bar has to run back across the box
+# rather than out past its wall, since 80 mm of bar hung off one end would put
+# the load 87 mm off centre on a box that is 88 mm wide.
+FIXED_X = 25.0
+BEAM_DIR = -1                    # -1: bar runs towards -X. +1 mirrors it.
+LOAD_X = FIXED_X + BEAM_DIR * BEAM_SPAN
 
 PAD_Z = -(FLANGE_H + PAD_H)      # underside of the anchor pad, -6
 SPACER_Z = PAD_Z - SPACER_H      # -16
 BEAM_Z = SPACER_Z - BEAM_H       # underside of the bar, -28.7
-HANGER_Z = BEAM_Z - HANGER_H
+RAIL_TOP = BEAM_Z - RAIL_GAP     # -32.7, so the spine never touches the bar
+RAIL_Z = RAIL_TOP - RAIL_T       # -46.7, and the one face the part prints on
+
+# The pad reaches all the way down to the rail's underside rather than sitting
+# proud of it. The tops cannot be flush -- RAIL_GAP is the clearance that keeps
+# the spine off the bar -- so the flat face has to be the bottom one. That
+# leaves a single 4 mm step, on top, rising towards the pad: a step up prints as
+# a step up, with nothing overhanging and no support anywhere on the part.
+PAD_T = BEAM_Z - RAIL_Z
+
+# The bar overhangs its screw pairs evenly, which is what makes the hanger 80 mm
+# long: it spans the same footprint.
+_overhang = (BEAM_L - BEAM_SPAN) / 2
+BEAM_X0 = min(FIXED_X, LOAD_X) - _overhang
+BEAM_X1 = max(FIXED_X, LOAD_X) + _overhang
 
 _spacer_x0 = min(FIXED_X - BEAM_PITCH / 2, -ANCHOR_PITCH / 2) - CLAMP_EDGE
 _spacer_x1 = max(FIXED_X + BEAM_PITCH / 2, ANCHOR_PITCH / 2) + CLAMP_EDGE
@@ -462,32 +495,51 @@ display(spacer)
 _export(spacer, "terrasse_beam_spacer")
 
 # ---------------------------------------------------------------------------
-# Hanger — bar above, wire below, arm back to the middle
+# Hanger — the wire hangs between the bolts, on a pad that carries everything
 # ---------------------------------------------------------------------------
-_hanger_x0 = LOAD_X - BEAM_PITCH / 2 - CLAMP_EDGE
-_hanger_x1 = LOAD_X + BEAM_PITCH / 2 + CLAMP_EDGE
-_arm_x0 = -CBORE_D                # enough material around the wire hole at x=0
+# The pad is the whole load path: wire in the middle, two bolts either side,
+# 15 mm apart. Nothing between them bends, so nothing is lost there. The spine
+# behind it reaches the bar's full 80 mm and carries no load at all.
+_pad_x0 = LOAD_X - BEAM_PITCH / 2 - CLAMP_EDGE
+_pad_x1 = LOAD_X + BEAM_PITCH / 2 + CLAMP_EDGE
 
-hanger = _box(_hanger_x1 - _hanger_x0, CLAMP_W, HANGER_H,
-              ((_hanger_x0 + _hanger_x1) / 2, 0, HANGER_Z))
-hanger = hanger.union(_box(_hanger_x1 - _arm_x0, CLAMP_W, ARM_T,
-                           ((_arm_x0 + _hanger_x1) / 2, 0, HANGER_Z)))
+# Bolts at one end, wire at the other. The spine spans between them, and it is
+# the whole load path -- so it is the deep section, not the pad.
+if BEAM_DIR < 0:
+    _rail_x0, _rail_x1 = _pad_x1 - 2.0, BEAM_X1
+    WIRE_X = BEAM_X1 - WIRE_EDGE
+else:
+    _rail_x0, _rail_x1 = BEAM_X0, _pad_x0 + 2.0
+    WIRE_X = BEAM_X0 + WIRE_EDGE
 
-# Up into the bar's load end: head recessed in the underside.
+hanger = _box(_pad_x1 - _pad_x0, HANGER_W, PAD_T,
+              ((_pad_x0 + _pad_x1) / 2, 0, RAIL_Z))
+hanger = hanger.union(_box(_rail_x1 - _rail_x0, HANGER_W, RAIL_T,
+                           ((_rail_x0 + _rail_x1) / 2, 0, RAIL_Z)))
+
+# Up into the bar's load end. The counterbore is sunk deep enough that an
+# ordinary M5 still reaches the thread through an 18 mm pad, leaving
+# BOLT_BEARING of material under the bar.
 for sx in (-1, 1):
     px = LOAD_X + sx * BEAM_PITCH / 2
-    hanger = hanger.cut(_cyl(LOAD_HOLE, HANGER_H, (px, 0, HANGER_Z)))
-    hanger = hanger.cut(_cyl(CBORE_D + 2.0, CBORE_H, (px, 0, HANGER_Z)))
+    hanger = hanger.cut(_cyl(LOAD_HOLE, PAD_T, (px, 0, RAIL_Z)))
+    hanger = hanger.cut(_cyl(CBORE_D + 2.0, PAD_T - BOLT_BEARING, (px, 0, RAIL_Z)))
 
-# The wire, on the box's centre line.
-hanger = hanger.cut(_cyl(WIRE_D, ARM_T, (0.0, 0.0, HANGER_Z)))
+# The wire, at the free end, on the same centre line as the bolts.
+hanger = hanger.cut(_cyl(WIRE_D, RAIL_T, (WIRE_X, 0.0, RAIL_Z)))
 
 display(hanger)
 _export(hanger, "terrasse_beam_hanger")
 
-print("terrasse spacer %.1f cm3   hanger %.1f cm3   arm clears bar by %.1f mm" % (
-    spacer.val().Volume() / 1000.0, hanger.val().Volume() / 1000.0,
-    BEAM_Z - (HANGER_Z + ARM_T)))
+print("terrasse spacer %.1f cm3   hanger %.1f cm3 (%.0f mm long)   "
+      "spine clears bar by %.1f mm" % (
+          spacer.val().Volume() / 1000.0, hanger.val().Volume() / 1000.0,
+          BEAM_X1 - BEAM_X0, BEAM_Z - RAIL_TOP))
+print("           wire at x=%.1f, %.1f mm from the bolts at x=%.1f; "
+      "one flat face, %.0f mm step on top"
+      % (WIRE_X, abs(WIRE_X - LOAD_X), LOAD_X, PAD_T - RAIL_T))
+print("           M5 must reach %.0f mm of pad plus the bar's thread"
+      % BOLT_BEARING)
 
 
 
