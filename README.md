@@ -225,7 +225,7 @@ slice, `.step` to open in CAD.
 
 ### `terrasse_body` + `terrasse_floor`
 
-An **88 × 78 × 60 mm** box for the bird scale, in two parts. The size is not a
+A **94 × 78 × 60 mm** box for the bird scale, in two parts. The size is not a
 choice — it comes from the measured envelopes, plugs included:
 
 | | | | |
@@ -236,8 +236,8 @@ choice — it comes from the measured envelopes, plugs included:
 That is 128 cm³ with clearance. The first version of this box had a 98 cm³
 interior, so no amount of rearranging would have done it; a grid packing search
 puts the smallest interior that takes all four at 76 × 66 × 52, and only with
-everything stood on end. This one is 80 × 70 × 55, which leaves room for the
-mounts themselves.
+everything stood on end. This one is 86 × 70 × 55, which leaves room for the
+mounts themselves — and 6 mm of that width is the insert bore's fault, below.
 
 The design follows from it hanging outdoors in the rain:
 
@@ -247,12 +247,26 @@ The design follows from it hanging outdoors in the rain:
   drips clear instead of running down the sides. Nothing is drilled through the
   top — the cord attaches to two round-ended tabs *outboard* of the walls,
   which is why the part reaches 108 mm across.
-- **The SHT31 sits in its own chamber**, an L-shaped column in the −X/−Y
-  corner, walled off by two baffles. Air enters through floor slots and leaves
-  through slots high in *both* adjacent walls, tilted 30° down-and-out: a
-  chimney whose every opening faces down or outward-down. The baffle is the
-  point — an SHT31 in the main volume would measure the board, not the terrace,
-  which is exactly the ~0.9 °C of self-heating already measured in the bedroom.
+- **The SHT31 lives in the −X/−Y corner, no longer behind a wall.** Air enters
+  through floor slots beneath it and leaves through slots high in *both*
+  adjacent walls, tilted 30° down-and-out — every opening faces down or
+  outward-down, so there is still a local draught across the sensor.
+
+  There *was* a baffle around it, and it came out because the cable could not
+  be got past it during assembly: the slot was widened, then run full height,
+  and it still fouled. That costs accuracy, since the board's heat now shares
+  the sensor's air — about 0.9 °C on the bedroom node. A box that cannot be
+  assembled is worse than one that reads half a degree warm, but keep the SHT31
+  in that corner rather than beside the board, or the loss compounds.
+- **The floor screws go into M4 heat-set inserts**, Ø5 bores in 11 mm posts,
+  which keeps 3 mm of wall around them. That is where the extra 6 mm of width
+  went: 11 mm posts pull each corner 3 mm further in, and the battery lane and
+  the HX711 pocket had no slack between them — the checks caught it as a
+  238 mm³ overlap between the cell and a post. A 9 mm post would have left
+  2 mm of wall, which is the thin-wall split the living-room box's own note
+  warns about, so the millimetres came out of the envelope instead. A Ø5 bore
+  is M4 territory (M3 inserts want about 4 mm); if yours are M3, `SCREW_CLEAR`
+  and `SCREW_CSK` go back to 3.4 / 6.6.
 - **The load hangs off a pad on the underside of the floor**, matching the
   clamp's 25 × 12 face and its screw pitch, with captive nuts reachable from
   inside the box.
