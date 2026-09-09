@@ -98,17 +98,20 @@ instead of dying.
   `scale_factor` against a known mass, both over the Home Assistant knobs, no
   reflash. It waits on the enclosure.
 
-**Open question — the runtime config path is not fully trustworthy:**
+**Answered 2026-09-09 — the runtime config path was broken, and is fixed:**
 
-`deep_sleep = 0` sat retained on the broker for days and **never took effect**:
-the node kept its 2 s poll cycle throughout. `heartbeat_interval = 60`, set the
-same way on the same path, clearly *did* — the publish cadence was ~78–90 s
-instead of the ~14 minutes a 600 s heartbeat gives. Both are back to their
-defaults now (`600` / `1`).
+`deep_sleep = 0` sat retained on the broker for days and never took effect.
+The cause was two `subscribe_to_topic` calls in a row in `publish_samples`.
+`rust-mqtt` polls for its own SUBACK and discards anything else that arrives —
+*"If an application message comes at this moment, it is lost"*, says
+`client.rs:145`, and then it returns an error. So the second subscribe swallowed
+the retained config the first one had just asked for. Deterministic, whenever
+retained config existed.
 
-Worth understanding before relying on that path, because **`tare` and
-`scale_factor` go through the same code** and the calibration above depends on
-them landing.
+It now sends one SUBSCRIBE carrying both filters. Verified on hardware:
+`config: heartbeat_interval = 660` followed by `config updated and saved to
+flash`. That matters here beyond the flag, because **`tare` and `scale_factor`
+go through the same code** — the calibration above could not have landed.
 
 **Four things that cost an evening, so that they do not cost another one:**
 
@@ -145,13 +148,14 @@ them landing.
   `clear` is a no-op. That banner is printed before the console window and is
   almost impossible to catch, since the C3 discards serial output no host is
   reading yet; it took five cold boots to see it once.
-- **Discovery is announced once per *power cycle*, not per boot.**
-  `FLAG_DISCOVERY` lives in RTC RAM, which survives deep sleep and even a
-  reflash. After the retained `homeassistant/` topics were cleared by hand the
-  node never re-announced, and its entities were simply missing while its
-  readings kept arriving. Pulling power restored all nine. `state.rs` says it
-  outright: *"to force a re-announce you have to pull power, not just flash and
-  reset."*
+- **Discovery used to be announced once per *power cycle*, and that was not
+  something power could be relied on to reset.** A boolean in RTC RAM said
+  "already announced"; it survived deep sleep, a reflash, a reset — and, as the
+  living-room node showed on 2026-09-09, several seconds with the USB cable out.
+  Its entities were simply missing while its readings kept arriving. Discovery
+  is now gated on a digest of every message it would send
+  (`discovery::announcement_tag`), so a changed entity set re-announces itself
+  and a stale word in RTC RAM fails to match by construction.
 
 ---
 

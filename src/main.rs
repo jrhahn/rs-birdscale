@@ -856,13 +856,10 @@ fn persist_if_changed(old: Config, new: Config) -> Config {
             Ok(()) => info!("config updated and saved to flash"),
             Err(e) => warn!("config save failed: {}", e),
         }
-        // The discovery payload embeds `expire_after`, derived from the publish
-        // cadence — so a changed heartbeat has to be re-announced, or Home
-        // Assistant keeps expiring the entities on the old schedule.
-        if new.heartbeat_secs != old.heartbeat_secs {
-            info!("heartbeat changed; re-announcing discovery on the next connect");
-            state::clear_discovery_published();
-        }
+        // A changed heartbeat used to force a re-announce from here, because
+        // `expire_after` is baked into the discovery payload. The announcement
+        // digest covers the payloads, so the next connect notices by itself —
+        // see `discovery::announcement_tag`.
     }
     new
 }
@@ -1062,8 +1059,9 @@ async fn publish_samples(
     // --- Home Assistant discovery (#16) ------------------------------------
     // Retained, so the broker replays it to Home Assistant on its next restart;
     // hence once per power cycle is enough (the flag lives in RTC RAM).
-    if !state::discovery_published() {
-        let availability = discovery::availability(&node, &cfg);
+    let availability = discovery::availability(&node, &cfg);
+    let announcement = discovery::announcement_tag(&node, &availability);
+    if state::discovery_tag() != announcement {
         let mut ok = true;
         for entity in discovery::entities(&node) {
             let topic = discovery::config_topic(&node, &entity);
@@ -1101,7 +1099,7 @@ async fn publish_samples(
             }
         }
         if ok {
-            state::mark_discovery_published();
+            state::set_discovery_tag(announcement);
             info!("published Home Assistant discovery for node '{}'", node.id);
         } else {
             warn!("discovery publish failed; will retry on the next connect");
@@ -1149,15 +1147,20 @@ async fn publish_samples(
     let config_prefix = node.config_prefix();
     let provision_topic = node::provision_topic(Efuse::read_base_mac_address());
 
-    // Two separate `let`s so neither subscription can be short-circuited away;
-    // either one succeeding is reason enough to drain.
-    let config_sub = client
-        .subscribe_to_topic(&node.config_wildcard())
-        .await
-        .is_ok();
-    let provision_sub = client.subscribe_to_topic(&provision_topic).await.is_ok();
+    // One SUBSCRIBE carrying both filters, emphatically not two in a row.
+    // `rust-mqtt`'s `subscribe_to_topic` polls for its own SUBACK and discards
+    // whatever else turns up -- "If an application message comes at this
+    // moment, it is lost", says the library, and then it returns an error. So
+    // subscribing twice fed the *first* subscription's retained config straight
+    // into the second call's poll, which dropped it on the floor. Every runtime
+    // knob was unreachable that way: tare, scale_factor, deep_sleep and the
+    // intervals all sat retained on the broker being thrown away once a round.
+    let config_wildcard = node.config_wildcard();
+    let mut filters = heapless::Vec::<&str, 2>::new();
+    let _ = filters.push(config_wildcard.as_str());
+    let _ = filters.push(provision_topic.as_str());
 
-    if config_sub || provision_sub {
+    if client.subscribe_to_topics(&filters).await.is_ok() {
         for _ in 0..12 {
             match with_timeout(CONFIG_RECV_WINDOW, client.receive_message()).await {
                 Ok(Ok((topic, payload))) => {

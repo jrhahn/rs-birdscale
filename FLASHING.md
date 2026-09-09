@@ -303,15 +303,15 @@ and for calibrating the scale.
 
 > **Re-flashing does *not* re-announce discovery.** The "already announced" flag
 > lives in RTC fast RAM, which survives both the flash and the reset that
-> follows it — confirmed on hardware. Only removing power clears it, so to force
-> a re-announce, **unplug the USB cable and plug it back in**. A board that has
-> published its discovery configs once will otherwise stay quiet on that topic
-> however many times you flash it.
+> follows it — confirmed on hardware. It survives a power cycle too, often
+> enough that nothing may depend on power clearing it: the living-room node came
+> back from several seconds unplugged with its flags intact.
 >
-> If Home Assistant has lost the entities and you also want the broker's copies
-> gone, clear the retained configs first with
-> `mosquitto_pub -h <broker-ip> -t 'homeassistant/sensor/<node>/<key>/config' -r -n`,
-> then power-cycle.
+> Discovery no longer cares. It is gated on a digest of every message it would
+> publish, so switching a sensor on and reflashing re-announces on the next
+> connect all by itself. If you want to force it anyway, clear the retained
+> configs with
+> `mosquitto_pub -h <broker-ip> -t 'homeassistant/sensor/<node>/<key>/config' -r -n`.
 
 ---
 

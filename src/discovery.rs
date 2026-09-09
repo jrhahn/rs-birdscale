@@ -141,6 +141,51 @@ pub fn entities(node: &NodeConfig) -> Vec<Entity, MAX_ENTITIES> {
     out
 }
 
+// FNV-1a, 32-bit. Chosen because it is eight lines and needs no state: this
+// runs on a chip whose whole job here is to notice that something changed.
+const FNV_OFFSET: u32 = 0x811c_9dc5;
+const FNV_PRIME: u32 = 0x0100_0193;
+
+fn fnv_str(mut hash: u32, s: &str) -> u32 {
+    for byte in s.as_bytes() {
+        hash ^= *byte as u32;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
+}
+
+/// A digest of every discovery message this node would publish right now —
+/// every topic and every payload, entities and controls alike.
+///
+/// Stored in RTC RAM after a successful announce (`state::discovery_tag`, which
+/// is HAL-gated) so the next connect can tell "already done" from "something
+/// changed". It
+/// covers the payloads and not just the topic list on purpose: `expire_after`
+/// is baked into them, so a changed publish cadence re-announces by itself
+/// rather than needing a special case at the call site.
+///
+/// Never returns 0, which is reserved for "nothing announced yet".
+pub fn announcement_tag(node: &NodeConfig, avail: &Availability) -> u32 {
+    let mut hash = FNV_OFFSET;
+    for entity in entities(node) {
+        hash = fnv_str(hash, config_topic(node, &entity).as_str());
+        if let Some(payload) = config_payload(node, &entity, avail) {
+            hash = fnv_str(hash, payload.as_str());
+        }
+    }
+    for control in controls(node) {
+        hash = fnv_str(hash, control_topic(node, control).as_str());
+        if let Some(payload) = control_payload(node, control, avail) {
+            hash = fnv_str(hash, payload.as_str());
+        }
+    }
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
+}
+
 /// `homeassistant/sensor/<node>/<prefix><key>/config`.
 pub fn config_topic(node: &NodeConfig, entity: &Entity) -> String<96> {
     let mut t = String::new();
@@ -438,7 +483,8 @@ mod tests {
     // heapless ones, and the tests want the std types.
     use super::{
         availability, config_payload, config_topic, control_payload, control_topic, controls,
-        entities, Availability, Config, NodeConfig, Slot, BATTERY_CONTROLS, MIN_EXPIRY_SECS,
+        announcement_tag, entities, Availability, Config, NodeConfig, Slot, BATTERY_CONTROLS,
+        MIN_EXPIRY_SECS,
         MISSED_ROUNDS, PREFIX, SCALE_CONTROLS, SCD41_CONTROLS, SDS011_CONTROLS,
     };
     use crate::node::FLEET;
@@ -938,4 +984,84 @@ mod tests {
             }
         }
     }
+
+    // --- The announcement digest -------------------------------------------
+
+    /// The exact fault this replaced a boolean for. `wohnzimmer` announced five
+    /// entities while its SDS011 slot was off, then had the slot switched on
+    /// and was reflashed. The old "have I announced yet" bit still said yes, so
+    /// `pm25`, `pm10` and their raw pair published to the broker for six days
+    /// with nothing in Home Assistant subscribed to them. A digest cannot say
+    /// yes to a question about a different entity set.
+    #[test]
+    fn switching_a_sensor_on_changes_the_digest() {
+        let before = NodeConfig {
+            sds011: Slot::off(),
+            ..crate::node::by_name("wohnzimmer").unwrap()
+        };
+        let after = NodeConfig {
+            sds011: Slot::on().compensated().every(900),
+            ..before
+        };
+        assert_ne!(
+            announcement_tag(&before, &availability_of(&before)),
+            announcement_tag(&after, &availability_of(&after)),
+        );
+    }
+
+    #[test]
+    fn an_unchanged_node_keeps_its_digest() {
+        // Otherwise every connect would re-announce, which is the airtime the
+        // stored tag exists to avoid.
+        for (_, node) in FLEET {
+            let avail = availability_of(node);
+            assert_eq!(
+                announcement_tag(node, &avail),
+                announcement_tag(node, &avail),
+                "{} is not stable",
+                node.id
+            );
+        }
+    }
+
+    /// `expire_after` is baked into the payloads, so this is what lets the
+    /// cadence change re-announce without a special case beside the flash write.
+    #[test]
+    fn a_changed_cadence_changes_the_digest() {
+        let node = crate::node::by_name("terrasse").unwrap();
+        let slow = Config {
+            heartbeat_secs: 600,
+            ..Config::DEFAULT
+        };
+        let fast = Config {
+            heartbeat_secs: 60,
+            ..Config::DEFAULT
+        };
+        assert_ne!(
+            announcement_tag(&node, &availability(&node, &slow)),
+            announcement_tag(&node, &availability(&node, &fast)),
+        );
+    }
+
+    #[test]
+    fn the_digest_is_never_the_nothing_announced_sentinel() {
+        // Zero means "RTC RAM holds nothing"; a real node must never collide
+        // with it, or its first announce would be skipped.
+        for (_, node) in FLEET {
+            assert_ne!(announcement_tag(node, &availability_of(node)), 0, "{}", node.id);
+        }
+    }
+
+    /// Two different nodes must not share a tag, or moving a board between
+    /// identities would keep the previous one's entities.
+    #[test]
+    fn different_nodes_have_different_digests() {
+        let mut seen: Vec<u32> = Vec::new();
+        for (_, node) in FLEET {
+            let tag = announcement_tag(node, &availability_of(node));
+            assert!(!seen.contains(&tag), "{} collides", node.id);
+            seen.push(tag);
+        }
+    }
+
 }

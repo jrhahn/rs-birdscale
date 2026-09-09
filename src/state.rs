@@ -3,12 +3,20 @@
 //! The firmware polls the scale by cold-booting out of deep sleep on a short
 //! interval, so plain statics (in regular RAM) are wiped on every wake. The
 //! tare baseline and the presence edge must instead survive across deep sleep,
-//! which is exactly what `#[ram(rtc_fast, persistent)]` gives us: the memory is
-//! zeroed once on the initial power-on and then left untouched across
-//! deep-sleep wake-ups, resets, etc.
+//! which is exactly what `#[ram(rtc_fast, persistent)]` gives us: the startup
+//! code leaves the region alone instead of zeroing it.
 //!
-//! Because the region is zero on first boot, `FLAGS == 0` naturally means
-//! "not yet initialised", so no separate magic value is needed.
+//! **Nothing here may depend on the region being cleared when power is
+//! removed.** Discovery used to: it was gated on a "have I announced yet" bit,
+//! on the assumption that a cold power-on zeroes RTC RAM. On 2026-09-09 a
+//! `wohnzimmer` node had its USB unplugged for several seconds and came back
+//! with the bit still set, so its four SDS011 entities stayed unannounced
+//! through a reflash, a reset *and* that power cycle — the readings were on the
+//! broker the whole time with nothing in Home Assistant to receive them. The
+//! board's rails evidently decay slower than the RTC domain forgets.
+//!
+//! So `FLAGS == 0` is a hint, not a guarantee. See [`discovery_tag`] for the
+//! shape that stays correct when the hint is wrong.
 
 use esp_hal::macros::ram;
 
@@ -28,14 +36,15 @@ static mut FLAGS: u32 = 0;
 #[ram(rtc_fast, persistent)]
 static mut IDLE_WAKES: u32 = 0;
 
+/// Digest of the discovery messages last successfully announced from this
+/// board; see [`crate::discovery::announcement_tag`]. Zero means "nothing".
+#[ram(rtc_fast, persistent)]
+static mut DISCOVERY_TAG: u32 = 0;
+
 /// Set once the baseline has been tared at least once.
 const FLAG_INIT: u32 = 1 << 0;
 /// Set while weight is above the presence threshold (edge detection).
 const FLAG_PRESENT: u32 = 1 << 1;
-/// Set once the Home Assistant discovery configs have been published in this
-/// power cycle. They are retained on the broker, so re-sending them on every
-/// deep-sleep wake would just spend battery on airtime.
-const FLAG_DISCOVERY: u32 = 1 << 2;
 /// Set at the end of the first boot of a power cycle. RTC RAM is wiped by a
 /// cold power-on but survives deep sleep, so an unset flag means "the board was
 /// just plugged in", which is the moment someone might be waiting at the serial
@@ -92,27 +101,28 @@ pub fn set_bird_present(present: bool) {
     set_flag(FLAG_PRESENT, present);
 }
 
-/// Whether Home Assistant discovery has already been published since the last
-/// cold power-on. A fresh power-up (battery swap, unplugging the USB cable)
-/// clears RTC RAM, so the configs are re-announced exactly when the broker might
-/// have lost them.
+/// The digest of the discovery messages last announced from this board, or 0.
 ///
-/// Note that **reflashing does not clear this** (see [`FLAG_BOOTED`]): to force
-/// a re-announce you have to pull power, not just flash and reset.
-pub fn discovery_published() -> bool {
-    flags() & FLAG_DISCOVERY != 0
+/// Compared against [`crate::discovery::announcement_tag`] rather than being a
+/// boolean, because *any* difference in what Home Assistant should know has to
+/// re-announce: a sensor switched on in [`crate::node`] and reflashed, a
+/// changed `expire_after`, or RTC RAM that survived a power cycle holding a
+/// value from before all of that.
+///
+/// The boolean it replaces could only ever answer "done", which is precisely
+/// the answer that cannot be checked — and it was wrong for six days on the
+/// living-room node (see the module note). A digest is checkable: if it does
+/// not match what this image would send, the announce happens again, and a
+/// stale or garbage word fails to match all by itself.
+pub fn discovery_tag() -> u32 {
+    unsafe { core::ptr::addr_of!(DISCOVERY_TAG).read() }
 }
 
-/// Record that the discovery configs went out.
-pub fn mark_discovery_published() {
-    set_flag(FLAG_DISCOVERY, true);
+/// Record the digest of the messages that just went out.
+pub fn set_discovery_tag(tag: u32) {
+    unsafe { core::ptr::addr_of_mut!(DISCOVERY_TAG).write(tag) }
 }
 
-/// Forget that discovery was published, so the next connect re-announces it.
-/// Needed when a value baked into the discovery payload changes.
-pub fn clear_discovery_published() {
-    set_flag(FLAG_DISCOVERY, false);
-}
 
 /// Idle wake-ups accumulated since the last publish.
 pub fn idle_wakes() -> u32 {

@@ -60,13 +60,15 @@ occasionally; the firmware also tracks slow baseline drift by itself.
 ## Example dashboard card
 
 Add to a dashboard (Raw configuration editor). Entity ids follow from the node
-name Home Assistant assigns the device — adjust if yours differ.
+name Home Assistant assigns the device — adjust if yours differ. The `title:`
+lines are just card headings, not entities: if one turns up in a dashboard and
+is not wanted, it is this YAML that put it there, not the firmware.
 
 ```yaml
 type: vertical-stack
 cards:
   - type: entities
-    title: Meisenknödel
+    title: Vogelwaage
     entities:
       - entity: sensor.terrasse_gewicht
       - entity: sensor.terrasse_temperatur
@@ -91,12 +93,12 @@ This directory used to hold a `configuration.yaml` fragment with the `mqtt:`
 number/switch blocks and a `birdscale_tare` script. To move off it:
 
 1. Delete that block (and the script) from your `configuration.yaml`, plus the
-   old hand-declared `smarthome/terrasse/state` and `smarthome/terrasse/temperature` sensors,
+   old hand-declared `birds/scale/state` and `birds/scale/temperature` sensors,
    and restart Home Assistant. The old entities are gone; the discovered ones —
    with different entity ids — have already appeared.
 2. Fix up any dashboard cards and automations that named the old entities.
 3. The firmware's mirror of the weight to `birds/scale/state` is **already
-   gone**: the node was renamed from `terrasse` to `terrasse` and moved to the
+   gone**: the node was renamed from `draussen` to `terrasse` and moved to the
    fleet's own `smarthome/terrasse/…` namespace, which retired the whole `birds`
    prefix along with it. `legacy_weight_topic` in `src/node.rs` is now unused by
    every node.
@@ -115,11 +117,27 @@ clears the retained message once it has acted on it.
 
 ## Forcing a re-announce
 
-Discovery is published once per power cycle (the flag lives in RTC RAM, which a
-reflash clears). To force it otherwise, delete the retained configs and
-power-cycle the board:
+You mostly should not have to. Discovery re-announces whenever **what it would
+say changes**: the firmware hashes every topic and payload it is about to
+publish and keeps that digest in RTC RAM (`discovery::announcement_tag`). Switch
+a sensor on in `src/node.rs` and reflash, change a cadence, move a board to a
+different node — the next connect notices and re-announces. Nothing changed
+means nothing is sent, so a battery node spends no airtime on it.
+
+That replaced a plain "have I announced yet" bit, which could only ever answer
+*yes* — the one answer that cannot be checked. It was wrong for six days on the
+living-room node: the bit was set while its SDS011 slot was still off, and after
+the slot was switched on the four PM entities published to the broker with
+nothing in Home Assistant subscribed to them. A reflash did not fix it, a reset
+did not fix it, and neither did pulling the USB cable for several seconds — the
+board's rails decay slower than the RTC domain forgets, so the bit came back
+still set.
+
+If you do want to force it, clear the digest by deleting the retained configs
+and power-cycling, or simply change any tuning knob and change it back:
 
 ```bash
 mosquitto_pub -h <broker-ip> -t 'homeassistant/sensor/<node>/<key>/config' -r -n
 mosquitto_pub -h <broker-ip> -t 'homeassistant/number/<node>/<key>/config' -r -n
 ```
+
