@@ -214,6 +214,15 @@ impl Sensors {
         let mut missing = false;
 
         if self.sht31.is_some() {
+            // Ask for a known state before asking anything else. A battery node
+            // cold-boots every couple of seconds while the sensor stays powered
+            // from 3V3, so a restart can land mid-transaction and leave the
+            // SHT31 part-way through a command -- still ACKing its address, so
+            // the bus scan finds it, but NAKing what comes next. That is the
+            // "0x44 answered" / "no SHT31-D at 0x44" pair in the log.
+            if let Some(s) = self.sht31.as_mut() {
+                s.soft_reset().await;
+            }
             let primary = acks(bus, sht31::ADDR, sht31::CMD_READ_STATUS).await;
             let alt = acks(bus, sht31::ADDR_ALT, sht31::CMD_READ_STATUS).await;
             match (primary, alt) {
@@ -223,7 +232,11 @@ impl Sensors {
                         "SHT31-D found at 0x{:02X} (ADDR strapped high); using it",
                         sht31::ADDR_ALT
                     );
-                    self.sht31 = Some(Sht31::with_address(bus, sht31::ADDR_ALT));
+                    let mut moved = Sht31::with_address(bus, sht31::ADDR_ALT);
+                    // The reset above went to the default address, which is not
+                    // where this one lives.
+                    moved.soft_reset().await;
+                    self.sht31 = Some(moved);
                 }
                 (false, false) => {
                     missing = true;

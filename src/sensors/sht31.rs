@@ -2,7 +2,7 @@
 //!
 //! Bus: I²C, address **0x44** (ADDR pin low) or 0x45 (high).
 //! Single-shot, high repeatability, clock-stretching **disabled**: write command
-//! `0x2400`, wait ~15 ms, then read 6 bytes:
+//! `0x2400`, wait out the conversion (see [`CONVERSION_MS`]), then read 6 bytes:
 //!   `T_MSB T_LSB CRC   RH_MSB RH_LSB CRC`
 //! each 16-bit word guarded by [`crc8_sensirion`](super::crc8_sensirion).
 //!
@@ -37,7 +37,15 @@ pub const CMD_SOFT_RESET: u16 = 0x30A2;
 /// there?" probe when working out which address the breakout is strapped to.
 pub const CMD_READ_STATUS: u16 = 0xF32D;
 /// Datasheet conversion time for high repeatability (ms); wait before reading.
-pub const CONVERSION_MS: u64 = 15;
+/// The datasheet's figure is 12.5 ms typical but **15.5 ms maximum**, so the
+/// old 15 sat under the worst case and read early often enough to matter: an
+/// early read is NAKed, `sample` returns `None`, and the node reports the
+/// sensor as not responding when it is merely still converting. Rounded up
+/// with a little margin rather than to the exact maximum.
+pub const CONVERSION_MS: u64 = 17;
+
+/// Datasheet soft-reset time (ms). 1.5 ms in the datasheet; wait 2.
+pub const RESET_MS: u64 = 2;
 
 pub const DESCRIPTORS: &[EntityDescriptor] = &[
     EntityDescriptor {
@@ -108,6 +116,25 @@ impl<I2C: I2cBus> Sht31<I2C> {
     /// caller can tell "the room is dry" from "the sensor did not answer".
     pub fn last_humidity_tenths(&self) -> Option<i32> {
         self.last_rh_tenths
+    }
+
+    /// Put the sensor back into a known state, and wait out the datasheet's
+    /// recovery time.
+    ///
+    /// This matters far more on a battery node than a mains one. The sensor is
+    /// powered continuously from 3V3, but the MCU beside it cold-boots every
+    /// couple of seconds; a restart that lands mid-transaction leaves the SHT31
+    /// part-way through a command. It then still ACKs its address — so a bus
+    /// scan finds it — while NAKing the next command, which is exactly how the
+    /// fault reads from outside: "I²C scan: 0x44 answered" next to "no SHT31-D
+    /// at 0x44 or 0x45". A mains node never hot-restarts and so never gets
+    /// there, which is why this only ever showed up outdoors.
+    ///
+    /// Errors are ignored on purpose: if the sensor is unreachable the probe
+    /// that follows says so with better wording than this could.
+    pub async fn soft_reset(&mut self) {
+        let _ = self.i2c.write(self.addr, &CMD_SOFT_RESET.to_be_bytes()).await;
+        Timer::after(Duration::from_millis(RESET_MS)).await;
     }
 
     /// One single-shot conversion -> `(temperature_raw, humidity_raw)`, or
@@ -252,6 +279,38 @@ mod tests {
     }
 
     #[cfg(feature = "drivers")]
+    #[cfg(feature = "drivers")]
+    #[test]
+    fn a_soft_reset_is_issued_before_anything_else_is_asked() {
+        use super::super::mock::{block_on, FakeI2c};
+
+        // The bug this guards: `CMD_SOFT_RESET` was defined and documented in
+        // this file and never sent, so a sensor left mid-command by the MCU's
+        // cold boot stayed that way -- ACKing its address for the bus scan
+        // while NAKing every command, which reads from outside as a missing
+        // sensor on a working bus.
+        let mut bus = FakeI2c::new(ADDR, [reply(24_900, 32_768)]);
+        let mut sensor = Sht31::new(&mut bus);
+        block_on(sensor.soft_reset());
+
+        assert_eq!(
+            bus.writes(),
+            vec![&CMD_SOFT_RESET.to_be_bytes()[..]],
+            "the reset command itself, and nothing else"
+        );
+    }
+
+    #[test]
+    fn the_conversion_wait_covers_the_datasheet_maximum() {
+        // 15.5 ms is the datasheet's worst case for high repeatability. The
+        // wait used to be 15, which read early often enough to report a working
+        // sensor as absent.
+        assert!(
+            CONVERSION_MS >= 16,
+            "waiting {CONVERSION_MS} ms cannot cover a 15.5 ms conversion"
+        );
+    }
+
     #[test]
     fn a_corrupt_word_is_dropped_rather_than_published() {
         use super::super::mock::{block_on, FakeI2c};
