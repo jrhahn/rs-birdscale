@@ -270,10 +270,16 @@ way the bar runs from there; flipping its sign mirrors the whole assembly, and
 since every feature sits on `y = 0`, an already-printed part just turns round.
 
 The hanger is 80 mm, the bar's own length, with the M5 bolts at one end and the
-wire hole at the other — **61.5 mm apart**. That is a cantilever in the load
-path, and what bends does not spring back exactly; the hysteresis lands in the
-weight. The spine is therefore the deep section, 14 mm, since stiffness goes
-with depth cubed. It is damage limitation rather than a fix.
+wire hole at the other, **61.5 mm apart**. The wire leaving from the far end is
+a requirement — it is where the feeder hangs — and the section is dimensioned
+for it rather than around it.
+
+What follows is a cantilever in the load path, which is why the **spine** is the
+deep part at 14 mm and not the pad: stiffness goes with depth cubed. Deflection
+here is an accuracy problem rather than a strength one — what bends does not
+spring back exactly, and that shows up as hysteresis in the weight. If readings
+ever differ between a loaded and an unloaded pan, deepen `RAIL_T` before
+suspecting anything in the firmware.
 
 > **Nothing but the bar may bridge the two clamps.** Only the hanger's pad
 > touches the bar; the spine runs 4 mm clear of it along its whole length and

@@ -395,14 +395,20 @@ print("terrasse body  %.1f cm3   floor %.1f cm3" % (
 ##      both jobs at once. The spacer offsets the fixed end in X until the two
 ##      pairs clear each other, and it is the spacer's height that lets the
 ##      free end deflect instead of fouling the floor.
-##   b) Bolts at one end of the hanger, the wire at the other. That is the
-##      arrangement asked for, and it puts WIRE_X 61.5 mm from the bolts -- a
-##      real cantilever in the load path. Anything that bends does not spring
-##      back exactly, and that hysteresis lands straight in the weight, so the
-##      spine is the deep section (RAIL_T, 14 mm) rather than the pad. Stiffness
-##      goes with depth cubed, which is damage limitation, not a substitute for
-##      having no lever at all. A version with the wire between the bolts had
-##      none; it was rejected because the wire has to leave from the far end.
+##   b) **The wire leaves from the far end. That is a requirement, not a
+##      preference** -- it is where the feeder has to hang from -- and the rest
+##      of the part is dimensioned to satisfy it. Bolts at one end, wire at the
+##      other, WIRE_X 61.5 mm away.
+##
+##      What follows from it is a cantilever in the load path, so the spine
+##      rather than the pad is the deep section: RAIL_T is 14 mm, and stiffness
+##      goes with depth cubed. That is the constraint being met, and it is why
+##      the spine is sized the way it is rather than trimmed to save filament.
+##      Deflection here is not a safety question, it is an accuracy one: what
+##      bends does not spring back exactly, and the difference shows up as
+##      hysteresis in the weight. If readings ever drift between a loaded and
+##      an unloaded pan, this section is the first thing to suspect -- deepen
+##      RAIL_T before touching anything in the firmware.
 ##   c) Nothing but the bar may bridge the two clamps. Only the hanger's pad
 ##      touches the bar; the spine runs RAIL_GAP clear of it for its whole
 ##      length. Touch anything and the load path goes around the strain gauges:
