@@ -27,7 +27,7 @@ use crate::battery;
 use crate::config::Config;
 use crate::ds18b20;
 use crate::node::{NodeConfig, Slot};
-use crate::sensors::{scale, scd41, sds011, sht31, EntityDescriptor};
+use crate::sensors::{scale, scd41, sds011, sgp41, sht31, EntityDescriptor};
 
 /// Upper bound on entities a node can expose (weight, probe temperature,
 /// SHT31 ×2, SCD41 ×3, SDS011 ×2, cell voltage), with headroom.
@@ -129,6 +129,7 @@ pub fn entities(node: &NodeConfig) -> Vec<Entity, MAX_ENTITIES> {
         (node.sht31, sht31::DESCRIPTORS),
         (node.scd41, scd41::DESCRIPTORS),
         (node.sds011, sds011::descriptors(node.sds011.compensated)),
+        (node.sgp41, sgp41::descriptors(node.sgp41.nox)),
         (node.battery, battery::DESCRIPTORS),
     ] {
         if !slot.enabled {
@@ -484,7 +485,7 @@ mod tests {
     use super::{
         availability, config_payload, config_topic, control_payload, control_topic, controls,
         announcement_tag, entities, Availability, Config, NodeConfig, Slot, BATTERY_CONTROLS,
-        MIN_EXPIRY_SECS,
+        MAX_ENTITIES, MIN_EXPIRY_SECS,
         MISSED_ROUNDS, PREFIX, SCALE_CONTROLS, SCD41_CONTROLS, SDS011_CONTROLS,
     };
     use crate::node::FLEET;
@@ -982,6 +983,56 @@ mod tests {
                 assert_eq!(name.trim(), name, "{name:?} is padded");
                 assert!(!name.contains("  "));
             }
+        }
+    }
+
+    // --- The gas sensor ----------------------------------------------------
+
+    #[test]
+    fn the_gas_sensor_announces_nox_only_where_it_is_declared() {
+        let voc_only = NodeConfig {
+            sgp41: Slot::on(),
+            ..crate::node::by_name("wohnzimmer").unwrap()
+        };
+        let with_nox = NodeConfig {
+            sgp41: Slot::on().with_nox(),
+            ..voc_only
+        };
+        let keys = |n: &NodeConfig| -> Vec<&'static str> {
+            entities(n).iter().map(|e| e.desc.key).collect()
+        };
+        assert!(keys(&voc_only).contains(&"voc_index"));
+        assert!(
+            !keys(&voc_only).contains(&"nox_index"),
+            "an SGP40 must not be given a channel it does not have"
+        );
+        assert!(keys(&with_nox).contains(&"nox_index"));
+        // And correcting a wrong declaration re-announces by itself.
+        assert_ne!(
+            announcement_tag(&voc_only, &availability_of(&voc_only)),
+            announcement_tag(&with_nox, &availability_of(&with_nox)),
+        );
+    }
+
+    /// `entities` pushes into a fixed-capacity Vec and **discards** the push
+    /// error, so an overflow silently drops whatever comes last in slot order —
+    /// the battery divider. Nothing would log it and no test would catch it
+    /// except this one. The living room with the gas sensor on is 11 of 12.
+    #[test]
+    fn no_node_overflows_the_entity_vec() {
+        for (_, node) in FLEET {
+            let with_gas = NodeConfig {
+                sgp41: Slot::on().with_nox(),
+                ..*node
+            };
+            let used = entities(&with_gas).len();
+            assert!(
+                used < MAX_ENTITIES,
+                "{} would use {} of {} entity slots",
+                node.id,
+                used,
+                MAX_ENTITIES
+            );
         }
     }
 

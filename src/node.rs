@@ -90,6 +90,15 @@ pub struct Slot {
     /// only a node that also carries an SHT31 may set it — a const assert below
     /// enforces that, since the correction has nothing to work from otherwise.
     pub compensated: bool,
+    /// Whether the fitted gas sensor has a NOx channel, i.e. is an SGP41 and
+    /// not an SGP40. Only the SGP41 slot honours it.
+    ///
+    /// Static because discovery is built from the node config and has no bus to
+    /// ask, while the driver settles the same question at runtime to avoid
+    /// *publishing* a channel that is not there. If this disagrees with the
+    /// board, correcting it re-announces by itself: the announcement digest
+    /// covers the entity set (see [`crate::discovery::announcement_tag`]).
+    pub nox: bool,
 }
 
 impl Slot {
@@ -102,6 +111,7 @@ impl Slot {
             unprefixed: &[],
             period_secs: 0,
             compensated: false,
+            nox: false,
         }
     }
 
@@ -116,6 +126,7 @@ impl Slot {
             unprefixed: &[],
             period_secs: 0,
             compensated: false,
+            nox: false,
         }
     }
 
@@ -134,9 +145,15 @@ impl Slot {
 
     /// Correct this sensor against the node's SHT31 and publish the raw values
     /// too (see [`Slot::compensated`]).
+    /// Declare that the gas sensor in this slot has a NOx channel.
+    pub const fn with_nox(self) -> Slot {
+        Slot { nox: true, ..self }
+    }
+
     pub const fn compensated(self) -> Slot {
         Slot {
             compensated: true,
+            nox: false,
             ..self
         }
     }
@@ -150,6 +167,7 @@ impl Slot {
             unprefixed: &[],
             period_secs: 0,
             compensated: false,
+            nox: false,
         }
     }
 
@@ -223,6 +241,9 @@ pub struct NodeConfig {
     pub sht31: Slot,
     pub scd41: Slot,
     pub sds011: Slot,
+    /// SGP41 (or SGP40) gas sensor. Mains only: its index needs a 1 Hz sample
+    /// and a hotplate that never cools, which a sleeping node cannot give it.
+    pub sgp41: Slot,
     /// Cell-voltage sense through the external divider (see [`crate::battery`]).
     /// Not a sensor on a bus but a property of how the board is powered, so it
     /// only ever belongs on a node with [`PowerProfile::Battery`] — and never
@@ -236,7 +257,7 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// Does this node need the I²C bus brought up?
     pub const fn uses_i2c(&self) -> bool {
-        self.sht31.enabled || self.scd41.enabled
+        self.sht31.enabled || self.scd41.enabled || self.sgp41.enabled
     }
 
     /// Does this node need the UART brought up?
@@ -321,6 +342,7 @@ const SCHLAFZIMMER: NodeConfig = NodeConfig {
     sht31: Slot::on(),
     scd41: Slot::on_as("scd41_", "SCD41").keeping(&["co2"]),
     sds011: Slot::off(),
+    sgp41: Slot::off(),
     battery: Slot::off(),
     legacy_weight_topic: None,
 };
@@ -354,6 +376,7 @@ const WOHNZIMMER: NodeConfig = NodeConfig {
     sht31: Slot::on(),
     scd41: Slot::on_as("scd41_", "SCD41").keeping(&["co2"]),
     sds011: Slot::on().compensated().every(900),
+    sgp41: Slot::off(),
     battery: Slot::off(),
     legacy_weight_topic: None,
 };
@@ -375,6 +398,7 @@ const KUECHE: NodeConfig = NodeConfig {
     sht31: Slot::on(),
     scd41: Slot::off(),
     sds011: Slot::off(),
+    sgp41: Slot::off(),
     battery: Slot::off(),
     legacy_weight_topic: None,
 };
@@ -390,6 +414,7 @@ const BAD: NodeConfig = NodeConfig {
     sht31: Slot::on(),
     scd41: Slot::off(),
     sds011: Slot::off(),
+    sgp41: Slot::off(),
     battery: Slot::off(),
     legacy_weight_topic: None,
 };
@@ -431,6 +456,7 @@ const TERRASSE: NodeConfig = NodeConfig {
     sht31: Slot::on(),
     scd41: Slot::off(),
     sds011: Slot::off(),
+    sgp41: Slot::off(),
     battery: Slot::on_as("battery_", "Batterie"),
     legacy_weight_topic: None,
 };

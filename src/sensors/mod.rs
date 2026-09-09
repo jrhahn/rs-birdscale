@@ -29,6 +29,7 @@ pub mod mock;
 pub mod scale;
 pub mod scd41;
 pub mod sds011;
+pub mod sgp41;
 pub mod sht31;
 
 /// Largest number of readings any one sensor emits per measurement. The widest
