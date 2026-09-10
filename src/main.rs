@@ -1168,6 +1168,21 @@ async fn publish_samples(
     // --- Home Assistant discovery (#16) ------------------------------------
     // Retained, so the broker replays it to Home Assistant on its next restart;
     // hence once per power cycle is enough (the flag lives in RTC RAM).
+    // Discovery goes out at QoS1, unlike the state topics below.
+    //
+    // QoS0 is fire-and-forget: `send_message` hands the packet to the socket
+    // and returns Ok, and whether the broker ever saw it is not knowable. That
+    // is fine for a reading which the next round replaces, and wrong for a
+    // retained config which nothing will send again -- because the digest is
+    // then stored on the strength of a write, not of an arrival, and the retry
+    // that exists for exactly this case never fires.
+    //
+    // It cost an afternoon on the outdoor node: ten of its fourteen
+    // announcements reached the broker, `ok` stayed true, the digest was
+    // stored, and `battery_percent`, `scale_factor`, `offset` and `tare` were
+    // simply absent with nothing anywhere reporting a failure. QoS1 makes the
+    // broker acknowledge each one, so the digest records what the broker has
+    // rather than what the socket accepted.
     let availability = discovery::availability(&node, &cfg);
     let announcement = discovery::announcement_tag(&node, &availability);
     if state::discovery_tag() != announcement {
@@ -1179,7 +1194,7 @@ async fn publish_samples(
                 continue;
             };
             if client
-                .send_message(&topic, payload.as_bytes(), QualityOfService::QoS0, true)
+                .send_message(&topic, payload.as_bytes(), QualityOfService::QoS1, true)
                 .await
                 .is_err()
             {
@@ -1200,7 +1215,7 @@ async fn publish_samples(
                 continue;
             };
             if client
-                .send_message(&topic, payload.as_bytes(), QualityOfService::QoS0, true)
+                .send_message(&topic, payload.as_bytes(), QualityOfService::QoS1, true)
                 .await
                 .is_err()
             {
