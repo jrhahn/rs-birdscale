@@ -497,32 +497,31 @@ async fn run_battery(
             // A fresh arrival starts a new stretch, whatever the last one did.
             state::set_present_rounds(0);
 
-            let cfg = if presence_publish_allowed(&cfg) {
+            if presence_publish_allowed(&cfg) {
                 let samples =
                     collect_samples(Some(visit.weight), Some(visit.millis), &cfg, board).await;
                 let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
                 state::set_idle_wakes(0);
-                cfg
-            } else {
-                // Rate-limited. The state is still tracked, only the airtime is
-                // withheld; the heartbeat will carry the reading within its own
-                // interval, so Home Assistant is stale but never blind.
-                warn!(
-                    "arrival within {} s of the last publish; holding the radio",
-                    presence::MIN_PUBLISH_GAP_SECS
-                );
-                cfg
-            };
 
-            // A load that outlasted the window drops back to the old cheap
-            // cadence, so snow on the cell cannot re-arm the awake path forever.
-            enter_deep_sleep(
-                lpwr,
-                if visit.still_loaded {
-                    cfg.active_interval()
-                } else {
-                    cfg.idle_interval()
-                },
+                // A load that outlasted the window drops back to the old cheap
+                // cadence, so snow on the cell cannot re-arm the awake path
+                // forever.
+                enter_deep_sleep(
+                    lpwr,
+                    if visit.still_loaded {
+                        cfg.active_interval()
+                    } else {
+                        cfg.idle_interval()
+                    },
+                );
+            }
+
+            // Rate-limited: withhold the airtime, not the state — and fall
+            // through to the heartbeat tail rather than sleeping here. See the
+            // invariant noted at that tail.
+            warn!(
+                "arrival within {} s of the last publish; holding the radio",
+                presence::MIN_PUBLISH_GAP_SECS
             );
         }
 
@@ -540,16 +539,16 @@ async fn run_battery(
                     presence::STUCK_AFTER_SECS
                 );
                 state::set_bird_present(false);
-                enter_deep_sleep(lpwr, cfg.idle_interval());
-            }
-
-            if presence_publish_allowed(&cfg) {
+                // Deliberately no sleep here: from this point the round is an
+                // empty one, and falling through is what keeps the heartbeat
+                // running. Sleeping here instead made the node mute — see the
+                // tail.
+            } else if presence_publish_allowed(&cfg) {
                 let samples = collect_samples(Some(raw), None, &cfg, board).await;
                 let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
                 state::set_idle_wakes(0);
                 enter_deep_sleep(lpwr, cfg.active_interval());
             }
-            enter_deep_sleep(lpwr, cfg.active_interval());
         }
 
         presence::Decision::Departed { delta } => {
@@ -562,22 +561,17 @@ async fn run_battery(
             );
             state::set_bird_present(false);
             state::set_present_rounds(0);
-            // `publish` consumes the config and hands back whatever Home
-            // Assistant changed, so it has to be threaded out of both arms.
-            let cfg = if presence_publish_allowed(&cfg) {
+            if presence_publish_allowed(&cfg) {
                 let samples = collect_samples(Some(raw), None, &cfg, board).await;
                 let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
                 state::set_idle_wakes(0);
-                cfg
-            } else {
-                // Suppressed here means Home Assistant keeps the last weight
-                // until the heartbeat. Worth it: a scale flapping fast enough
-                // to hit this limit publishes departures as often as arrivals,
-                // and letting one side through unbounded would bound nothing.
-                warn!("departure within the rate limit; the heartbeat will carry it");
-                cfg
-            };
-            enter_deep_sleep(lpwr, cfg.idle_interval());
+                enter_deep_sleep(lpwr, cfg.idle_interval());
+            }
+            // Suppressed here means Home Assistant keeps the last weight until
+            // the heartbeat. Worth it: a scale flapping fast enough to hit this
+            // limit publishes departures as often as arrivals, and letting one
+            // side through unbounded would bound nothing.
+            warn!("departure within the rate limit; the heartbeat will carry it");
         }
 
         // Steady empty: absorb slow creep into the baseline.
@@ -593,10 +587,18 @@ async fn run_battery(
         ),
     }
 
-    // Empty house from here on. Periodic heartbeat: once enough empty polls have
-    // elapsed, bring Wi-Fi up and publish anyway, so Home Assistant keeps a
-    // fresh reading even with no visitor. The counter lives in RTC RAM so it
-    // survives the deep-sleep cold boots between polls.
+    // **Every round that did not publish arrives here**, and that is an
+    // invariant rather than a convenience: an empty house, a rate-limited
+    // presence edge, and a load ruled stuck all reach this tail. A branch that
+    // sleeps on its own instead skips the heartbeat, and a battery node that
+    // skips its heartbeat is simply mute — which is exactly what the first
+    // version of the rate limiter did to the outdoor node on 2026-09-10. It
+    // dropped to the idle cadence and never spoke again; the broker log showed
+    // no connection at all, while the node itself looked healthy on serial.
+    //
+    // Periodic heartbeat: once enough polls have elapsed, bring Wi-Fi up and
+    // publish anyway, so Home Assistant keeps a fresh reading. The counter
+    // lives in RTC RAM so it survives the deep-sleep cold boots between polls.
     let wakes = state::idle_wakes() + 1;
     if wakes >= cfg.heartbeat_wakes() {
         info!("heartbeat: publishing periodic readings");
