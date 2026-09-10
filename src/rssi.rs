@@ -56,9 +56,14 @@ pub fn read() -> Option<i8> {
     // the driver only writes within it. Callable only once `esp_wifi` has been
     // initialised, which on this firmware is true from `bring_up_wifi` onwards.
     let mut record: wifi_ap_record_t = unsafe { core::mem::zeroed() };
-    if unsafe { esp_wifi_sta_get_ap_info(&mut record) } == 0 {
+    let err = unsafe { esp_wifi_sta_get_ap_info(&mut record) };
+    if err == 0 {
         Some(record.rssi)
     } else {
+        // Logged rather than swallowed: the entity is announced unconditionally,
+        // so a silent `None` shows up as a permanently unavailable sensor with
+        // nothing anywhere saying why.
+        log::warn!("esp_wifi_sta_get_ap_info failed: {}", err);
         None
     }
 }
