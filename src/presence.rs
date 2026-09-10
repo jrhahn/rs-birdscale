@@ -48,6 +48,55 @@ pub fn drift_band(threshold_ticks: i32) -> i32 {
     (threshold_ticks / DRIFT_BAND_DIVISOR).max(1)
 }
 
+/// Shortest interval between two presence-driven publishes, in seconds.
+///
+/// The scale is the one sensor here that can ask for airtime on its own, and on
+/// the night of 2026-09-09 it asked for all of it: an uncalibrated cell kept
+/// crossing its own threshold, the node published on every arrival, and eleven
+/// hours of that at ~230 radio sessions an hour flattened a 2000 mAh pack. The
+/// broker log is the record -- 3 to 6 connections an hour before, 230 an hour
+/// after.
+///
+/// One a minute, not the ten a minute that first suggested itself: ten a minute
+/// is 600 an hour, two and a half times the rate that did the damage, and about
+/// 72 mAh an hour once the radio is paid for. At one a minute a node that
+/// flaps without pause still lives past ten days, and a real visit is never
+/// reported more than a minute late.
+pub const MIN_PUBLISH_GAP_SECS: u32 = 60;
+
+/// After this long continuously loaded, a load stops counting as a visitor.
+///
+/// The rate limit above bounds *flapping*; this bounds *sticking*, which is the
+/// other way the same night could have gone. A bird does not sit on a feeder
+/// for ten minutes, so a load that does is snow, a twig, a pan resting against
+/// the enclosure, or a tare baseline taken while the beam was being handled --
+/// and none of those should hold the node on its expensive cadence.
+pub const STUCK_AFTER_SECS: u32 = 600;
+
+/// Whole rounds of `round_secs` needed to cover `secs`, at least one.
+///
+/// Rounded up: the loop only wakes on its own cadence, so a budget between two
+/// multiples would be spent early.
+pub const fn rounds_for(secs: u32, round_secs: u32) -> u32 {
+    let round = if round_secs == 0 { 1 } else { round_secs };
+    let rounds = secs.div_ceil(round);
+    if rounds == 0 {
+        1
+    } else {
+        rounds
+    }
+}
+
+/// Whether a presence publish may spend airtime now.
+///
+/// `rounds_since_publish` is what [`crate::state::idle_wakes`] already counts:
+/// wakes since the last publish of any kind, reset by every publish. So the
+/// limiter needs no clock and no second counter -- it reuses the one the
+/// heartbeat already keeps.
+pub const fn may_publish(rounds_since_publish: u32, gap_rounds: u32) -> bool {
+    rounds_since_publish >= gap_rounds
+}
+
 /// What one load-cell reading means for the presence state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision {
@@ -363,4 +412,60 @@ mod tests {
             assert_eq!(buf.as_str(), expected, "{millis} ms");
         }
     }
+
+    // --- Rate limiting ------------------------------------------------------
+
+    #[test]
+    fn the_gap_is_rounded_up_to_whole_rounds() {
+        // 60 s at a 2 s idle round is 30 wakes; at 7 s it is 9, not 8, because
+        // eight would let the publish through at 56 s.
+        assert_eq!(rounds_for(60, 2), 30);
+        assert_eq!(rounds_for(60, 7), 9);
+        assert_eq!(rounds_for(60, 60), 1);
+        assert_eq!(rounds_for(60, 600), 1);
+    }
+
+    #[test]
+    fn a_zero_round_does_not_divide_by_zero() {
+        assert_eq!(rounds_for(60, 0), 60);
+    }
+
+    #[test]
+    fn the_limiter_lets_a_first_visit_straight_through() {
+        // The heartbeat has just fired, so the counter is high: a bird landing
+        // now must be reported at once, which is the whole point of the node.
+        assert!(may_publish(300, rounds_for(MIN_PUBLISH_GAP_SECS, 2)));
+    }
+
+    #[test]
+    fn the_limiter_holds_back_a_flapping_scale() {
+        let gap = rounds_for(MIN_PUBLISH_GAP_SECS, 2);
+        assert!(!may_publish(0, gap), "immediately after a publish");
+        assert!(!may_publish(gap - 1, gap), "one round short");
+        assert!(may_publish(gap, gap), "exactly at the gap");
+    }
+
+    /// The number is a battery budget, so assert the budget rather than the
+    /// number: whatever the constant becomes, the worst case has to stay
+    /// survivable for more than a week.
+    #[test]
+    fn the_worst_case_rate_still_leaves_over_a_week() {
+        let per_hour = 3600 / MIN_PUBLISH_GAP_SECS;
+        // ~0.12 mAh per radio session, measured against a 2000 mAh pack.
+        let mah_per_hour = per_hour * 12 / 100;
+        let hours = 2000 / mah_per_hour.max(1);
+        assert!(
+            hours > 24 * 7,
+            "{per_hour}/h would flatten the pack in {hours} h"
+        );
+    }
+
+    #[test]
+    fn a_stuck_load_stops_counting_before_it_costs_a_night() {
+        // Eleven hours is what it cost. Whatever the constant is, it has to be
+        // a small fraction of that.
+        assert!(STUCK_AFTER_SECS <= 3600, "{STUCK_AFTER_SECS} s is not a bound");
+        assert!(STUCK_AFTER_SECS >= 120, "a bird may legitimately linger");
+    }
+
 }

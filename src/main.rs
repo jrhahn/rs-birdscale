@@ -485,10 +485,25 @@ async fn run_battery(
             let visit = watch_visit(board, raw, baseline, &cfg).await;
             state::set_bird_present(visit.still_loaded);
 
-            let samples =
-                collect_samples(Some(visit.weight), Some(visit.millis), &cfg, board).await;
-            let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
-            state::set_idle_wakes(0);
+            // A fresh arrival starts a new stretch, whatever the last one did.
+            state::set_present_rounds(0);
+
+            let cfg = if presence_publish_allowed(&cfg) {
+                let samples =
+                    collect_samples(Some(visit.weight), Some(visit.millis), &cfg, board).await;
+                let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+                state::set_idle_wakes(0);
+                cfg
+            } else {
+                // Rate-limited. The state is still tracked, only the airtime is
+                // withheld; the heartbeat will carry the reading within its own
+                // interval, so Home Assistant is stale but never blind.
+                warn!(
+                    "arrival within {} s of the last publish; holding the radio",
+                    presence::MIN_PUBLISH_GAP_SECS
+                );
+                cfg
+            };
 
             // A load that outlasted the window drops back to the old cheap
             // cadence, so snow on the cell cannot re-arm the awake path forever.
@@ -506,9 +521,25 @@ async fn run_battery(
             // The load outlasted its awake window, so this is no longer a bird
             // being weighed — just a load being tracked cheaply.
             info!("load still on the scale: raw={} delta={}", raw, delta);
-            let samples = collect_samples(Some(raw), None, &cfg, board).await;
-            let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
-            state::set_idle_wakes(0);
+            state::set_present_rounds(state::present_rounds().saturating_add(1));
+
+            if presence_is_stuck(&cfg) {
+                warn!(
+                    "load has been on the scale for over {} s; not a visitor. \
+                     Dropping to the idle cadence — re-tare with the beam at rest \
+                     (`tare`, or a power cycle) if this is the baseline and not the weather.",
+                    presence::STUCK_AFTER_SECS
+                );
+                state::set_bird_present(false);
+                enter_deep_sleep(lpwr, cfg.idle_interval());
+            }
+
+            if presence_publish_allowed(&cfg) {
+                let samples = collect_samples(Some(raw), None, &cfg, board).await;
+                let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+                state::set_idle_wakes(0);
+                enter_deep_sleep(lpwr, cfg.active_interval());
+            }
             enter_deep_sleep(lpwr, cfg.active_interval());
         }
 
@@ -521,9 +552,22 @@ async fn run_battery(
                 raw, delta
             );
             state::set_bird_present(false);
-            let samples = collect_samples(Some(raw), None, &cfg, board).await;
-            let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
-            state::set_idle_wakes(0);
+            state::set_present_rounds(0);
+            // `publish` consumes the config and hands back whatever Home
+            // Assistant changed, so it has to be threaded out of both arms.
+            let cfg = if presence_publish_allowed(&cfg) {
+                let samples = collect_samples(Some(raw), None, &cfg, board).await;
+                let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+                state::set_idle_wakes(0);
+                cfg
+            } else {
+                // Suppressed here means Home Assistant keeps the last weight
+                // until the heartbeat. Worth it: a scale flapping fast enough
+                // to hit this limit publishes departures as often as arrivals,
+                // and letting one side through unbounded would bound nothing.
+                warn!("departure within the rate limit; the heartbeat will carry it");
+                cfg
+            };
             enter_deep_sleep(lpwr, cfg.idle_interval());
         }
 
@@ -748,6 +792,34 @@ async fn run_awake(
 /// Seconds between rounds in the stay-awake loop: a mains node follows its
 /// per-node cadence, a battery node kept awake for bench testing follows the
 /// live-tunable idle interval so it still feels like the sleeping one.
+/// Whether a presence-driven publish may spend airtime this round.
+///
+/// The load cell is the only sensor here that can ask for the radio on its own
+/// schedule, and on 2026-09-09 it asked for all of it: an uncalibrated cell
+/// sitting 21152 ticks over a 4200-tick threshold reported `Staying` every
+/// active round for ten hours, at ~230 broker sessions an hour against a
+/// design rate of six. It cost nothing that night only because the node was on
+/// USB; on the cell it would have been about 28 mAh an hour.
+///
+/// [`state::idle_wakes`] already counts rounds since the last publish and is
+/// reset by every publish, so the limit needs no clock of its own.
+fn presence_publish_allowed(cfg: &Config) -> bool {
+    let gap = presence::rounds_for(presence::MIN_PUBLISH_GAP_SECS, cfg.idle_secs);
+    presence::may_publish(state::idle_wakes(), gap)
+}
+
+/// Whether a load has sat there too long to still be a visitor.
+///
+/// Bounds the other half of the same failure: the rate limit stops a *flapping*
+/// scale, this stops a *stuck* one. A bird does not sit on a feeder for ten
+/// minutes, so past that it is snow, a twig, or a baseline taken while the beam
+/// was being handled — and none of those should hold the node on the expensive
+/// cadence.
+fn presence_is_stuck(cfg: &Config) -> bool {
+    let limit = presence::rounds_for(presence::STUCK_AFTER_SECS, cfg.active_secs);
+    state::present_rounds() >= limit
+}
+
 fn sample_period_secs(cfg: &Config) -> u64 {
     let node = node::active();
     if node.power.is_battery() {

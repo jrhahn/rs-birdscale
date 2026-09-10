@@ -36,6 +36,12 @@ static mut FLAGS: u32 = 0;
 #[ram(rtc_fast, persistent)]
 static mut IDLE_WAKES: u32 = 0;
 
+/// Consecutive rounds a load has been on the scale, for the stuck-load bound
+/// in [`crate::presence::STUCK_AFTER_SECS`]. Reset by an arrival or a
+/// departure, so it only ever counts one uninterrupted stretch.
+#[ram(rtc_fast, persistent)]
+static mut PRESENT_ROUNDS: u32 = 0;
+
 /// Digest of the discovery messages last successfully announced from this
 /// board; see [`crate::discovery::announcement_tag`]. Zero means "nothing".
 #[ram(rtc_fast, persistent)]
@@ -123,6 +129,16 @@ pub fn set_discovery_tag(tag: u32) {
     unsafe { core::ptr::addr_of_mut!(DISCOVERY_TAG).write(tag) }
 }
 
+
+/// How many consecutive rounds a load has been on the scale.
+pub fn present_rounds() -> u32 {
+    unsafe { core::ptr::addr_of!(PRESENT_ROUNDS).read() }
+}
+
+/// Replace the consecutive-load counter.
+pub fn set_present_rounds(value: u32) {
+    unsafe { core::ptr::addr_of_mut!(PRESENT_ROUNDS).write(value) }
+}
 
 /// Idle wake-ups accumulated since the last publish.
 pub fn idle_wakes() -> u32 {
