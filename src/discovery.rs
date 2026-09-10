@@ -15,6 +15,23 @@
 //! This module only *builds* the topic/payload pairs; `main` owns the MQTT
 //! client and does the publishing, which keeps the rust-mqtt types out of here.
 //!
+//! **A newly discovered entity loses its first reading.** In the round that
+//! announces it, the config message and the state publish leave a few
+//! milliseconds apart, and Home Assistant has not finished creating the entity
+//! when the state arrives. State topics are QoS0 and not retained, so that
+//! reading is simply dropped and the entity sits at `unavailable` until the
+//! next round. Nothing is broken and nothing needs fixing — `expire_after` is
+//! several rounds wide, so the entity never expires over it — but it is worth
+//! knowing before diagnosing the node: an entity that stays unavailable while
+//! its siblings publish is new, not silent. Its siblings are unaffected
+//! precisely because Home Assistant already knows them.
+//!
+//! Seen when the RSSI entity arrived: the bath and kitchen nodes both logged
+//! `rssi = ...` and `Published ... to smarthome/<node>/rssi` on their first
+//! round after flashing, while Home Assistant showed `unavailable` until the
+//! second. On a battery node, where rounds are ten minutes apart, that gap is
+//! ten minutes long.
+//!
 //! Payloads use Home Assistant's abbreviated keys (`stat_t`, `dev_cla`, …) and
 //! the `~` base-topic shorthand, mostly to keep them inside the small MQTT
 //! buffers a no_std node can afford.
