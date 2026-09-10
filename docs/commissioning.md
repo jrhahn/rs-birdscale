@@ -25,8 +25,12 @@ second.
 | `e0:72:a1:18:e2:c0` | `terrasse` | battery | 192.168.1.81 |
 | `ac:27:6e:80:51:f8` | `wohnzimmer` | mains | — |
 | `ac:27:6e:82:43:94` | `kueche` | mains | 192.168.1.30 |
+| `ac:27:6e:7e:10:a0` | `schlafzimmer` | mains | — |
+| `ac:27:6e:7f:a6:b4` | `bad` | mains | — |
 
-`schlafzimmer` and `bad` predate this log; their boards have not been opened.
+Complete as of 2026-09-10: the last two were read off `espflash board-info`
+during the RSSI rollout, so every board in the fleet is now identifiable
+without opening anything.
 
 ---
 
@@ -54,6 +58,49 @@ Replaced the node formerly called `draussen`. It carries the bird-feeder scale.
   4.1 V with USB attached is indistinguishable from the 4.11 V measured above
   with no cell at all.
 - **It charges.** 3.80 V before a short USB session, 3.93 V after.
+
+**Verified on hardware 2026-09-10 — the scale is calibrated:**
+
+- **Zero taken in the working position**, hanging outdoors with the bird house
+  fitted and empty. The mount's own load, the cord tension and the beam's
+  orientation all enter the raw value, so a zero taken on the desk would carry
+  that whole difference as a standing error. Residual reading afterwards:
+  0.5–2.1 g, about a thousandth of the calibration mass.
+- **`scale_factor` = 1862.8 ticks/g**, from 545 g of known mass reading 2417.2
+  with the placeholder 420 still in place. Verified by the same mass reading
+  **545.2 g** afterwards — 0.04 % out.
+- **The bird house and mount weigh 451 g**, which is what the +1999 g jump on
+  hanging it works out to once the factor is right. Worth writing down as the
+  sanity check it is: an implausible number here means the factor is wrong.
+- **The threshold was too sensitive, not too coarse.** With the placeholder
+  factor, `threshold_grams: 10.0` amounted to `10 × 420 / 1862.8` ≈ **2.3 g** of
+  real mass. That, not a mechanical fault, is what had the node publishing
+  visits all day against an uncalibrated scale.
+
+### Taring adopts the presence baseline, not a fresh reading
+
+`Config::apply` sets `offset = tare_ref`, and `main` passes `state::baseline()`
+— the persisted presence baseline, not a reading taken when the button is
+pressed. Two consequences decide the whole procedure:
+
+**Press it only after the baseline has caught up.** Hanging the house is a load
+far above the threshold, so the node reads `Arrived`/`Staying` and only absorbs
+it into the baseline once `STUCK_AFTER_SECS` (600 s) has passed. Tare before
+that and it copies a stale zero.
+
+**Removing a calibration mass leaves the baseline stuck.** Once absorbed, taking
+the mass off is a large *negative* delta: `decide` classifies it as
+`Unexplained`, which deliberately leaves the baseline alone, and nothing else
+ever moves it back. Tare in that state would copy the mass-inclusive value and
+show roughly minus its weight.
+
+The way out needs no physical access. Raise `threshold` far enough that the step
+lands inside the drift band (`threshold/4`) — 3000 g for a 545 g mass — let the
+`Quiet` drift pull the baseline back, then set it to 10 g again. The drift keeps
+15/16 of the error per 2 s round, so 600 s is 300 rounds and
+`(15/16)^300 = 3.9e-09`: from 1 015 226 ticks that leaves 0.004 ticks. The
+firmware accepts any finite `threshold ≥ 0` over MQTT; the 500 g maximum is
+only the Home Assistant slider's.
 
 ### The socket is wired with the colours crossed, and that is correct
 
@@ -222,6 +269,28 @@ SHT31-D only, verified 2026-09-04. Nothing outstanding.
 ---
 
 ## Open across the fleet
+
+- **`terrasse` still runs firmware without `rssi`.** The other four were
+  flashed 2026-09-10 and report on every round: `bad` −58, `kueche` −49,
+  `schlafzimmer` −49, `wohnzimmer` −58 dBm. All four sit in the top bar, so the
+  indicator has not yet been read against a link that is actually weak — which
+  is the case it exists for. `wohnzimmer` alternates −58/−61 and therefore
+  straddles the three-bar threshold (`>= -61`), so its tile will flicker between
+  three bars and two.
+
+  Flashing `terrasse` needs the listener loop in
+  [`../FLASHING.md`](../FLASHING.md), and it is safe for the calibration:
+  `espflash` reported `Segment at address '0x0' has not changed` and the same
+  for `0x8000` on all four boards, and the config blob lives at `0x9000` in the
+  `nvs` partition, which a plain `espflash flash` never touches. The boot log
+  confirms the layout: `boot: 0 nvs WiFi data 01 02 00009000 00006000`.
+- **A newly announced entity loses its first reading.** Not a fault, but it
+  cost an hour of misdiagnosis: `bad` showed `sensor.bad_signal` as
+  `unavailable` while temperature and humidity published normally, and the
+  serial log proved the node had read and published the value. Home Assistant
+  had not finished creating the entity when the non-retained QoS0 state
+  arrived. See the module docs in `src/discovery.rs`. On a battery node that gap
+  lasts a full round, i.e. ten minutes.
 
 - **Nothing has had its current measured.** Every battery figure in
   [`base-platform.md`](base-platform.md) is estimated from datasheets around a
