@@ -251,10 +251,37 @@ SHT31-D only, verified 2026-09-04. Nothing outstanding.
   `sample()` rather than the boot-time probe: `CONVERSION_MS` was 15 ms against
   a datasheet maximum of **15.5 ms** for high repeatability, so an occasional
   read lands before the conversion finishes, is NAKed, and reports a working
-  sensor as absent. Raised to 17 ms, but **only `terrasse` carries the fix so
-  far** — the four mains nodes still run the old image, which makes tonight an
-  unintended A/B test. Flash them once an overnight capture confirms the
-  dropouts stop on the fixed node and continue on the others.
+  sensor as absent. Raised to 17 ms.
+
+  **The overnight A/B test that was meant to confirm this did not.** Only
+  `terrasse` carried the fix; the four mains nodes ran the old image. Over
+  8.3 hours (2026-09-09 23:00 → 2026-09-10 07:20) the count of missed readings
+  was:
+
+  | node | cadence | missed |
+  | --- | --- | --- |
+  | bad | 120 s | 0 |
+  | kueche | 121 s | 0 |
+  | schlafzimmer | 61 s | 0 |
+  | wohnzimmer | 61 s | 1 |
+  | terrasse (fixed) | — | 0 |
+
+  Every apparent dropout was **one event at 03:10**, hitting all five nodes
+  within 40 seconds — schlafzimmer 03:10:05, kueche 03:10:32, terrasse
+  03:10:39, bad 03:10:43, wohnzimmer 03:10:45. Independent sensors do not fail
+  synchronously, so that was the network, the broker, or the capturing client,
+  not the driver.
+
+  So the test is **inconclusive rather than negative**: the control group stayed
+  healthy all night, and a fault that does not occur cannot be measured. That is
+  consistent with the report, which said *sometimes*. If it is conversion time,
+  temperature is a plausible trigger — the SHT31's conversion drifts with it,
+  and a cool quiet night is the friendly case, unlike a bathroom after a shower.
+
+  **Flash the other four on the datasheet argument, not on this evidence.**
+  15 ms under a 15.5 ms maximum is wrong whether or not it bit last night.
+  Proving it needs a capture over days, long enough for the rare case to appear
+  and show that it only hits the unfixed nodes.
 - **Mains nodes self-heat.** Measured 2026-09-04 on `schlafzimmer`: about 0.9 °C
   at the board, separated from room warming by using the unmoved SCD41 as a
   control. Mount temperature sensors away from the board on any node that
