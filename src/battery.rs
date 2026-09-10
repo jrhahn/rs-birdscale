@@ -56,13 +56,107 @@ use crate::sensors::EntityDescriptor;
 /// The key is the bare quantity; the node's [`crate::node::Slot`] prefixes it to
 /// `battery_voltage`, which is what makes the entity read as the cell's rather
 /// than as some anonymous voltage.
-pub const DESCRIPTORS: &[EntityDescriptor] = &[EntityDescriptor {
-    key: "voltage",
-    name: "Spannung",
-    unit: "V",
-    device_class: "voltage",
-    state_class: "measurement",
-}];
+pub const DESCRIPTORS: &[EntityDescriptor] = &[
+    EntityDescriptor {
+        key: "voltage",
+        name: "Spannung",
+        unit: "V",
+        device_class: "voltage",
+        state_class: "measurement",
+    },
+    // The estimate, published beside the measurement rather than instead of
+    // it. `device_class: battery` is what gets Home Assistant's battery icon
+    // and its low-battery automations; see [`percent`] for what the number is
+    // and is not worth.
+    EntityDescriptor {
+        key: "percent",
+        name: "Ladestand",
+        unit: "%",
+        device_class: "battery",
+        state_class: "measurement",
+    },
+];
+
+/// Resting-voltage breakpoints for a 1S LiPo, millivolts to percent.
+///
+/// Ascending, and interpolated linearly between neighbours by [`percent`].
+/// Twenty-one points rather than a formula because the curve has no useful
+/// closed form: it is steep at both ends and almost flat across the middle.
+const CURVE: &[(u32, u32)] = &[
+    (3270, 0),
+    (3610, 5),
+    (3690, 10),
+    (3710, 15),
+    (3730, 20),
+    (3750, 25),
+    (3770, 30),
+    (3790, 35),
+    (3800, 40),
+    (3820, 45),
+    (3840, 50),
+    (3850, 55),
+    (3870, 60),
+    (3910, 65),
+    (3950, 70),
+    (3980, 75),
+    (4020, 80),
+    (4080, 85),
+    (4110, 90),
+    (4150, 95),
+    (4200, 100),
+];
+
+/// State of charge from cell voltage, 0..100.
+///
+/// **This is an estimate, and a weak one in the middle of the range.** Look at
+/// [`CURVE`]: 3.84 V to 3.69 V spans fifty percentage points across 150 mV,
+/// so a 20 mV error — well inside what the divider's resistor tolerance and
+/// the ADC's calibration give — moves the answer by several percent. Voltage
+/// also sags under load and shifts with temperature and cell age, none of
+/// which this sees.
+///
+/// It is published anyway because a percentage is what a dashboard can use and
+/// `3.93 V` is not, and because the voltage stays published beside it for
+/// anyone who wants the number the node actually measured. Two further things
+/// it cannot know:
+///
+/// * **With USB attached it reads the charger, not the cell.** The divider sits
+///   on the protected rail, which the charger drives to ~4.2 V regardless of
+///   how full the cell is, so this saturates at 100 % whenever the node is
+///   plugged in. The voltage has always had that limitation; the percentage
+///   just makes it look more authoritative than it is.
+/// * **It is not a fuel gauge.** Between 3.7 and 4.0 V lives most of the
+///   capacity and almost none of the voltage swing. Treat the middle as "fine"
+///   and watch the ends, which is where the curve is actually steep.
+pub const fn percent(cell_mv: u32) -> u32 {
+    let first = CURVE[0];
+    if cell_mv <= first.0 {
+        return first.1;
+    }
+    let last = CURVE[CURVE.len() - 1];
+    if cell_mv >= last.0 {
+        return last.1;
+    }
+    let mut i = 1;
+    while i < CURVE.len() {
+        let (mv_hi, pct_hi) = CURVE[i];
+        if cell_mv <= mv_hi {
+            let (mv_lo, pct_lo) = CURVE[i - 1];
+            // Integer interpolation, rounded. No floats on this chip by choice:
+            // everything else here formats and computes in integers too.
+            let span_mv = mv_hi - mv_lo;
+            let span_pct = pct_hi - pct_lo;
+            return pct_lo + ((cell_mv - mv_lo) * span_pct + span_mv / 2) / span_mv;
+        }
+        i += 1;
+    }
+    last.1
+}
+
+/// Format a percentage as a plain integer, float-free like the rest.
+pub fn write_percent(buf: &mut String<16>, percent: u32) {
+    let _ = write!(buf, "{}", percent);
+}
 
 /// The divider actually fitted, top (to `B+`) and bottom (to ground) in kΩ.
 pub const R_TOP_KOHM: u32 = 100;
@@ -245,4 +339,71 @@ mod tests {
         assert!(buf.len() < 16);
         assert!(buf.contains('.'));
     }
+
+    // --- State of charge ----------------------------------------------------
+
+    #[test]
+    fn the_curve_ends_where_it_should() {
+        assert_eq!(percent(3270), 0);
+        assert_eq!(percent(4200), 100);
+    }
+
+    #[test]
+    fn the_curve_clamps_outside_its_range() {
+        // A flat cell and a charger-driven rail both land outside the table;
+        // neither may wrap or extrapolate into nonsense.
+        assert_eq!(percent(0), 0);
+        assert_eq!(percent(2500), 0);
+        assert_eq!(percent(4500), 100);
+        assert_eq!(percent(u32::MAX), 100);
+    }
+
+    #[test]
+    fn the_curve_never_goes_backwards() {
+        // Interpolation across twenty-one hand-entered breakpoints: a single
+        // transposed pair would show up as a percentage that falls while the
+        // voltage rises, and nothing else would notice.
+        let mut previous = 0;
+        let mut mv = 3000;
+        while mv <= 4300 {
+            let p = percent(mv);
+            assert!(
+                p >= previous,
+                "percent({mv}) = {p} after {previous}"
+            );
+            assert!(p <= 100, "percent({mv}) = {p}");
+            previous = p;
+            mv += 1;
+        }
+    }
+
+    #[test]
+    fn every_breakpoint_reads_back_exactly() {
+        for (mv, expected) in CURVE {
+            assert_eq!(percent(*mv), *expected, "at {mv} mV");
+        }
+    }
+
+    /// Not a nice property — a *documented* one. The doc comment on `percent`
+    /// claims the middle of the range is nearly useless, and this is what makes
+    /// that claim checkable rather than a disclaimer nobody reads.
+    #[test]
+    fn the_middle_of_the_range_is_as_flat_as_advertised() {
+        let span = percent(3840) - percent(3690);
+        assert!(
+            span >= 35,
+            "3.69-3.84 V should span most of the middle, got {span} points"
+        );
+        // ... and the ends are where the resolution actually is.
+        assert!(percent(3610) - percent(3270) <= 10);
+    }
+
+    #[test]
+    fn a_charging_rail_reads_full_which_is_the_known_limitation() {
+        // The divider sits on the rail the charger drives, so this is what a
+        // plugged-in node reports no matter how empty the cell is. Asserted so
+        // that anyone surprised by it finds the reason next to the surprise.
+        assert_eq!(percent(cell_millivolts(2100)), 100);
+    }
+
 }

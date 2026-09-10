@@ -1036,6 +1036,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_battery_node_announces_both_the_voltage_and_the_level() {
+        let node = crate::node::by_name("terrasse").unwrap();
+        let keys: Vec<&str> = entities(&node)
+            .iter()
+            .filter(|e| e.slot.prefix == "battery_")
+            .map(|e| e.desc.key)
+            .collect();
+        assert_eq!(keys, ["voltage", "percent"]);
+        // The percentage is the estimate; the measurement has to stay beside
+        // it, or the only number left would be the one that was guessed.
+        let avail = availability_of(&node);
+        let topics: Vec<String> = entities(&node)
+            .iter()
+            .map(|e| config_topic(&node, e).to_string())
+            .collect();
+        assert!(topics.contains(&"homeassistant/sensor/terrasse/battery_voltage/config".to_string()));
+        assert!(topics.contains(&"homeassistant/sensor/terrasse/battery_percent/config".to_string()));
+        for entity in entities(&node) {
+            assert!(config_payload(&node, &entity, &avail).is_some());
+        }
+    }
+
     // --- The announcement digest -------------------------------------------
 
     /// The exact fault this replaced a boolean for. `wohnzimmer` announced five

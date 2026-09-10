@@ -831,6 +831,15 @@ async fn collect_samples(
                     );
                 }
                 platform::push_sample(&mut samples, node.battery, "voltage", value);
+
+                // The estimate, beside the measurement. Same branch on
+                // purpose: below `MIN_PLAUSIBLE_CELL_MV` neither is published,
+                // because a percentage derived from a wiring fault would look
+                // far more convincing than the voltage it came from.
+                let mut level = heapless::String::new();
+                battery::write_percent(&mut level, battery::percent(mv));
+                info!("battery = {} %", level);
+                platform::push_sample(&mut samples, node.battery, "percent", level);
             }
             None => warn!("battery ADC never finished a conversion; skipping voltage"),
         }
