@@ -107,6 +107,42 @@ espflash board-info          # confirm the chip is detected
 > ROM bootloader: **hold the `B` (BOOT / GPIO9) button, tap `R` (RESET), release
 > `B`.** Then re-run the flash command.
 
+### Flashing a battery node without reaching its buttons
+
+The buttons are not always reachable — a node in its enclosure, on a mast, or
+wired into a scale. There is no need for them.
+
+The reason a single `espflash flash` fails is not that the node is unreachable;
+it is that it is only reachable *briefly*. It deep-sleeps about two seconds
+after boot and its USB port goes with it, so one invocation started at the
+wrong moment finds nothing. But **every wake re-enumerates the port**, so only
+one attempt has to land inside a window — and `espflash`'s own pre-connect
+reset drops the chip into the ROM bootloader, where it then waits patiently.
+
+So poll fast, fire the moment a port appears, and retry until one syncs:
+
+```bash
+ELF=target/riscv32imc-unknown-none-elf/release/rs-smarthome-nodes
+while :; do
+  p=$(ls /dev/ttyACM* 2>/dev/null | head -1)
+  [ -n "$p" ] && espflash flash --port "$p" "$ELF" && break
+  sleep 0.02
+done
+```
+
+Start it *before* plugging the node in. The 20 ms poll matters: at 200 ms most
+of the wake window is gone before the first attempt. Expect several failed
+attempts in the output — that is the loop working, not a fault.
+
+`--port` is required, not optional: without it `espflash` asks which port to
+use, and a non-interactive shell gets `IO error: not a terminal` rather than a
+prompt.
+
+One thing the loop cannot do for you: **a reflash does not clear RTC RAM.** The
+tare baseline, the presence flag and the discovery digest all survive it (see
+[`src/state.rs`](src/state.rs)). If the point of the reflash was to clear a bad
+baseline, pull the power afterwards and leave the beam alone for that boot.
+
 ### Do not use `espflash monitor` to check *whether* an app is running
 
 It resets the chip in order to attach — `--before default-reset` is the

@@ -313,6 +313,15 @@ async fn main(spawner: Spawner) {
     if state::is_cold_boot() {
         console_provisioning(peripherals.USB_DEVICE).await;
     }
+    // A `persistent` RTC word is not initialised by the startup code, so a
+    // counter that has just been added to the firmware starts at whatever was
+    // in that slot. This one fired its stuck-load bound on the first boot after
+    // the reflash that introduced it -- harmless, since an arrival resets it,
+    // but a legitimate first visit would have been misjudged once. Zero it
+    // where a cold boot is already being detected.
+    if state::is_cold_boot() {
+        state::set_present_rounds(0);
+    }
     state::mark_booted();
 
     // Runtime config from flash (calibration + tuning), or defaults on a blank
