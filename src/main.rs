@@ -172,6 +172,8 @@ const CONSOLE_WINDOW_STRANDED: Duration = Duration::from_secs(120);
 /// Config key carrying a tare request. Called out because, unlike every other
 /// key, acting on it means deleting the retained message afterwards.
 const TARE_KEY: &str = "tare";
+/// Config key that forgets the discovery digest; see `REANNOUNCE_CONTROLS`.
+const REANNOUNCE_KEY: &str = "reannounce";
 
 /// Give up on a single HX711 conversion after this long. A disconnected sensor
 /// (with `DT` pulled up) never becomes ready, so this bounds the boot.
@@ -1268,6 +1270,7 @@ async fn publish_samples(
     let mut updated = cfg;
     let mut reprovision = None;
     let mut tare_pressed = false;
+    let mut reannounce_pressed = false;
     let config_prefix = node.config_prefix();
     let provision_topic = node::provision_topic(Efuse::read_base_mac_address());
 
@@ -1303,6 +1306,16 @@ async fn publish_samples(
                         // change" answer: taring an already-zeroed scale changes
                         // nothing, but the press still has to be consumed.
                         tare_pressed |= key == TARE_KEY && !value.is_empty();
+
+                        // Forget what the broker is believed to hold, so the
+                        // next connect announces everything again. The only
+                        // way out of a digest that disagrees with the broker;
+                        // see `discovery::REANNOUNCE_CONTROLS`.
+                        if key == REANNOUNCE_KEY && !value.is_empty() {
+                            info!("re-announce requested; clearing the discovery digest");
+                            state::set_discovery_tag(0);
+                            reannounce_pressed = true;
+                        }
                         if updated.apply(key, value, baseline) {
                             info!("config: {} = {}", key, value);
                         }
@@ -1320,6 +1333,21 @@ async fn publish_samples(
     // thing distinguishing a press from its own echo is whether it is still on
     // the broker: an empty retained payload deletes it. If this fails we simply
     // tare again next time, which on an empty scale lands on the same zero.
+    for (pressed, key) in [(reannounce_pressed, REANNOUNCE_KEY)] {
+        if !pressed {
+            continue;
+        }
+        let mut topic = config_prefix.clone();
+        if topic.push_str(key).is_ok()
+            && client
+                .send_message(&topic, &[], QualityOfService::QoS0, true)
+                .await
+                .is_err()
+        {
+            warn!("could not clear retained {}; it may be applied again", key);
+        }
+    }
+
     if tare_pressed {
         let mut tare_topic = config_prefix.clone();
         if tare_topic.push_str(TARE_KEY).is_ok()

@@ -295,6 +295,27 @@ pub struct Control {
     pub spec: &'static str,
 }
 
+/// The one knob every node has, because the digest can be wrong and nothing
+/// else can tell it so.
+///
+/// [`announcement_tag`] records what this board believes the broker holds, and
+/// it is stored on the strength of a publish having been *sent*. If the broker
+/// never received one -- or a retained config was cleared by hand afterwards --
+/// the node has no way to notice, and no amount of power-cycling helps: RTC RAM
+/// on this board has twice now survived several seconds without power.
+///
+/// That is exactly what happened to the outdoor node: ten of fourteen
+/// announcements on the broker, the digest recording all fourteen, and the
+/// calibration controls therefore unreachable with no path back short of
+/// changing the entity set in the firmware. Hence a button.
+const REANNOUNCE_CONTROLS: &[Control] = &[Control {
+    component: "button",
+    key: "reannounce",
+    name: "Discovery neu ankündigen",
+    reads_back: false,
+    spec: "\"pl_prs\":\"reannounce\",",
+}];
+
 /// Knobs that only exist on a node carrying a load cell.
 const SCALE_CONTROLS: &[Control] = &[
     Control {
@@ -398,9 +419,9 @@ const BATTERY_CONTROLS: &[Control] = &[
 /// Every command entity this node exposes.
 pub fn controls(node: &NodeConfig) -> Vec<&'static Control, MAX_CONTROLS> {
     let mut out = Vec::new();
-    for control in SCALE_CONTROLS
+    for control in REANNOUNCE_CONTROLS
         .iter()
-        .filter(|_| node.scale.enabled)
+        .chain(SCALE_CONTROLS.iter().filter(|_| node.scale.enabled))
         .chain(SCD41_CONTROLS.iter().filter(|_| node.scd41.enabled))
         .chain(SDS011_CONTROLS.iter().filter(|_| node.sds011.compensated))
         .chain(BATTERY_CONTROLS.iter().filter(|_| node.power.is_battery()))
@@ -589,6 +610,12 @@ mod tests {
                 assert_eq!(&topic[prefix.len()..], control.key);
                 // Two values, because one of them may happen to equal the
                 // default and `apply` reports "changed", not "understood".
+                // `reannounce` is the one control that is not a config
+                // value: it forgets the discovery digest, which lives in RTC
+                // RAM, so `main`'s drain handles it rather than `Config`.
+                if control.key == "reannounce" {
+                    continue;
+                }
                 let mut probe = Config::DEFAULT;
                 assert!(
                     probe.apply(control.key, "1", 0) || probe.apply(control.key, "0", 0),
@@ -901,13 +928,17 @@ mod tests {
     }
 
     #[test]
-    fn a_node_with_nothing_to_tune_has_no_knobs_at_all() {
-        // Better an empty Configuration section than controls that do nothing.
-        // `kueche` is the case today: mains, no load cell, and an SDS011 whose
-        // duty cycle is a per-node constant rather than a runtime knob.
+    fn a_node_with_nothing_to_tune_has_only_the_re_announce_button() {
+        // Better a near-empty Configuration section than controls that do
+        // nothing. `kueche` is the case today: mains, no load cell, and an
+        // SDS011 whose duty cycle is a per-node constant rather than a runtime
+        // knob. The one thing every node keeps is the re-announce button,
+        // because a digest that disagrees with the broker is otherwise
+        // unrecoverable — see `REANNOUNCE_CONTROLS`.
         for (name, node) in FLEET {
             if !node.power.is_battery() && !node.scale.enabled && !node.scd41.enabled {
-                assert!(controls(node).is_empty(), "{name} exposes dead controls");
+                let keys: Vec<&str> = controls(node).iter().map(|c| c.key).collect();
+                assert_eq!(keys, vec!["reannounce"], "{name} exposes dead controls");
             }
         }
     }
@@ -919,7 +950,7 @@ mod tests {
         // so it must not drag the battery or load-cell knobs in with it.
         let bedroom = crate::node::by_name("schlafzimmer").unwrap();
         let keys: Vec<&str> = controls(&bedroom).iter().map(|c| c.key).collect();
-        assert_eq!(keys, vec!["scd41_temp_offset"]);
+        assert_eq!(keys, vec!["reannounce", "scd41_temp_offset"]);
     }
 
     #[test]
