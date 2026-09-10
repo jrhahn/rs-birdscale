@@ -71,6 +71,12 @@ pub const MIN_PUBLISH_GAP_SECS: u32 = 60;
 /// for ten minutes, so a load that does is snow, a twig, a pan resting against
 /// the enclosure, or a tare baseline taken while the beam was being handled --
 /// and none of those should hold the node on its expensive cadence.
+///
+/// What happens at the bound is *absorption*, not disbelief: `main` moves the
+/// baseline to the current reading. Clearing the presence flag alone left the
+/// load above the threshold, so the next round read `Arrived` and the node
+/// oscillated. [`drift_band`] refuses a step this large because it cannot tell
+/// a step from a visitor; ten minutes is the evidence it lacks.
 pub const STUCK_AFTER_SECS: u32 = 600;
 
 /// Whole rounds of `round_secs` needed to cover `secs`, at least one.

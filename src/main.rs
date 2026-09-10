@@ -538,11 +538,28 @@ async fn run_battery(
                      (`tare`, or a power cycle) if this is the baseline and not the weather.",
                     presence::STUCK_AFTER_SECS
                 );
+                // Absorb it, rather than merely stop believing it.
+                //
+                // Clearing the flag alone was not enough and the hardware said
+                // so: the load was still over the threshold, so the next round
+                // read `Arrived`, which reset this counter and spent another
+                // 60 s in `watch_visit`. The node oscillated at ~30 publishes
+                // an hour instead of the six it should manage — better than the
+                // 230 it started at, and still five times too many.
+                //
+                // A load that has sat there for ten minutes *is* the empty
+                // state. `presence::drift_band` refuses to absorb a step this
+                // large because it cannot tell a step from a visitor, and it is
+                // right not to guess — ten minutes is the evidence it was
+                // missing. Absorbing it takes the delta to zero, ends the
+                // presence, and repairs exactly the fault that caused this: a
+                // tare baseline that no longer matches the mechanics.
+                state::set_baseline(raw);
                 state::set_bird_present(false);
-                // Deliberately no sleep here: from this point the round is an
-                // empty one, and falling through is what keeps the heartbeat
-                // running. Sleeping here instead made the node mute — see the
-                // tail.
+                state::set_present_rounds(0);
+                // No sleep here: from this point the round is an empty one, and
+                // falling through is what keeps the heartbeat running. Sleeping
+                // here instead made the node mute — see the tail.
             } else if presence_publish_allowed(&cfg) {
                 let samples = collect_samples(Some(raw), None, &cfg, board).await;
                 let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
