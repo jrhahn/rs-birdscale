@@ -27,11 +27,18 @@ use crate::battery;
 use crate::config::Config;
 use crate::ds18b20;
 use crate::node::{NodeConfig, Slot};
+use crate::rssi;
 use crate::sensors::{scale, scd41, sds011, sgp41, sht31, EntityDescriptor};
 
 /// Upper bound on entities a node can expose (weight, probe temperature,
-/// SHT31 ×2, SCD41 ×3, SDS011 ×2, cell voltage), with headroom.
-pub const MAX_ENTITIES: usize = 12;
+/// SHT31 ×2, SCD41 ×3, SDS011 ×2, cell voltage, link RSSI), with headroom.
+///
+/// Raised from 12 when the RSSI entity arrived: the living room with the gas
+/// sensor on sat at 11 of 12, so one more per node would have hit the cap
+/// exactly — and `entities` pushes with `let _ =`, which drops silently.
+/// `no_node_overflows_the_entity_vec` is what turns that into a failing test
+/// rather than a missing sensor.
+pub const MAX_ENTITIES: usize = 14;
 /// Upper bound on command entities (the calibration and tuning knobs).
 pub const MAX_CONTROLS: usize = 12;
 
@@ -131,6 +138,12 @@ pub fn entities(node: &NodeConfig) -> Vec<Entity, MAX_ENTITIES> {
         (node.sds011, sds011::descriptors(node.sds011.compensated)),
         (node.sgp41, sgp41::descriptors(node.sgp41.nox)),
         (node.battery, battery::DESCRIPTORS),
+        // Not behind a `NodeConfig` field, unlike every sensor above. A node
+        // that cannot reach Wi-Fi cannot publish at all, so there is no
+        // configuration to express: the slot is on for everyone, and `Slot::on`
+        // means "every round", which is exactly the cadence a link property
+        // has. Its `expire_after` therefore follows the node's base round.
+        (Slot::on(), rssi::DESCRIPTORS),
     ] {
         if !slot.enabled {
             continue;
@@ -832,8 +845,15 @@ mod tests {
             sht31: Slot::on(),
             ..crate::node::by_name("kueche").unwrap()
         };
-        let keys =
-            |n: &NodeConfig| -> Vec<&str> { entities(n).iter().map(|e| e.desc.key).collect() };
+        // Filtered to the sensors under test: every node also announces its
+        // link RSSI, which is not what this is about.
+        let keys = |n: &NodeConfig| -> Vec<&str> {
+            entities(n)
+                .iter()
+                .map(|e| e.desc.key)
+                .filter(|k| *k != "rssi")
+                .collect()
+        };
         assert_eq!(keys(&plain), ["pm25", "pm10"]);
         assert_eq!(
             keys(&corrected),
@@ -1048,7 +1068,7 @@ mod tests {
     /// `entities` pushes into a fixed-capacity Vec and **discards** the push
     /// error, so an overflow silently drops whatever comes last in slot order —
     /// the battery divider. Nothing would log it and no test would catch it
-    /// except this one. The living room with the gas sensor on is 11 of 12.
+    /// except this one. The living room with the gas sensor on is 12 of 14.
     #[test]
     fn no_node_overflows_the_entity_vec() {
         for (_, node) in FLEET {

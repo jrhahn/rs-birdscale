@@ -66,7 +66,7 @@ use rust_mqtt::{
 
 use node::Provision;
 use rs_smarthome_nodes::{
-    battery, config, discovery, ds18b20, hx711, node, platform, presence, state, wifi,
+    battery, config, discovery, ds18b20, hx711, node, platform, presence, rssi, state, wifi,
 };
 
 use battery::Battery;
@@ -434,8 +434,8 @@ async fn run_battery(
     // A node with no load cell has no presence logic to run: sample everything
     // it does have, publish, and go back to sleep.
     if !node.scale.enabled {
-        let samples = collect_samples(None, None, &cfg, board).await;
-        let cfg = publish(spawner, radio, &samples, state::baseline(), cfg).await;
+        let mut samples = collect_samples(None, None, &cfg, board).await;
+        let cfg = publish(spawner, radio, &mut samples, state::baseline(), cfg).await;
         // The *heartbeat* interval, not the idle one. `idle_interval` is the
         // rate the load cell gets polled at — two seconds by default, which is
         // cheap precisely because those wake-ups never touch the radio. Without
@@ -458,8 +458,8 @@ async fn run_battery(
             let wakes = state::idle_wakes() + 1;
             if wakes >= cfg.heartbeat_wakes() {
                 state::set_idle_wakes(0);
-                let samples = collect_samples(None, None, &cfg, board).await;
-                let cfg = publish(spawner, radio, &samples, state::baseline(), cfg).await;
+                let mut samples = collect_samples(None, None, &cfg, board).await;
+                let cfg = publish(spawner, radio, &mut samples, state::baseline(), cfg).await;
                 enter_deep_sleep(lpwr, cfg.idle_interval());
             }
             state::set_idle_wakes(wakes);
@@ -500,9 +500,9 @@ async fn run_battery(
             state::set_present_rounds(0);
 
             if presence_publish_allowed(&cfg) {
-                let samples =
+                let mut samples =
                     collect_samples(Some(visit.weight), Some(visit.millis), &cfg, board).await;
-                let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+                let cfg = publish(spawner, radio, &mut samples, baseline, cfg).await;
                 state::set_idle_wakes(0);
 
                 // A load that outlasted the window drops back to the old cheap
@@ -563,8 +563,8 @@ async fn run_battery(
                 // falling through is what keeps the heartbeat running. Sleeping
                 // here instead made the node mute — see the tail.
             } else if presence_publish_allowed(&cfg) {
-                let samples = collect_samples(Some(raw), None, &cfg, board).await;
-                let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+                let mut samples = collect_samples(Some(raw), None, &cfg, board).await;
+                let cfg = publish(spawner, radio, &mut samples, baseline, cfg).await;
                 state::set_idle_wakes(0);
                 enter_deep_sleep(lpwr, cfg.active_interval());
             }
@@ -581,8 +581,8 @@ async fn run_battery(
             state::set_bird_present(false);
             state::set_present_rounds(0);
             if presence_publish_allowed(&cfg) {
-                let samples = collect_samples(Some(raw), None, &cfg, board).await;
-                let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+                let mut samples = collect_samples(Some(raw), None, &cfg, board).await;
+                let cfg = publish(spawner, radio, &mut samples, baseline, cfg).await;
                 state::set_idle_wakes(0);
                 enter_deep_sleep(lpwr, cfg.idle_interval());
             }
@@ -622,8 +622,8 @@ async fn run_battery(
     if wakes >= cfg.heartbeat_wakes() {
         info!("heartbeat: publishing periodic readings");
         state::set_idle_wakes(0);
-        let samples = collect_samples(Some(raw), None, &cfg, board).await;
-        let cfg = publish(spawner, radio, &samples, baseline, cfg).await;
+        let mut samples = collect_samples(Some(raw), None, &cfg, board).await;
+        let cfg = publish(spawner, radio, &mut samples, baseline, cfg).await;
         enter_deep_sleep(lpwr, cfg.idle_interval());
     }
     state::set_idle_wakes(wakes);
@@ -787,12 +787,12 @@ async fn run_awake(
         }
 
         let baseline = state::baseline();
-        let samples = collect_samples(raw, None, &cfg, board).await;
+        let mut samples = collect_samples(raw, None, &cfg, board).await;
 
         // Publish every cycle for a live view; this also drains retained config.
         let updated = match with_timeout(
             WIFI_BUDGET,
-            publish_samples(stack, &samples, baseline, cfg),
+            publish_samples(stack, &mut samples, baseline, cfg),
         )
         .await
         {
@@ -984,7 +984,7 @@ fn persist_if_changed(old: Config, new: Config) -> Config {
 async fn publish(
     spawner: Spawner,
     radio: Radio,
-    samples: &Samples,
+    samples: &mut Samples,
     baseline: i32,
     cfg: Config,
 ) -> Config {
@@ -1050,7 +1050,7 @@ async fn bring_up_wifi(spawner: Spawner, radio: Radio) -> Result<&'static WifiSt
 async fn connect_and_publish(
     spawner: Spawner,
     radio: Radio,
-    samples: &Samples,
+    samples: &mut Samples,
     baseline: i32,
     cfg: Config,
 ) -> Result<Config, &'static str> {
@@ -1097,7 +1097,7 @@ async fn wait_for_network(stack: &'static WifiStack) {
 /// updates applied (unchanged if none were waiting).
 async fn publish_samples(
     stack: &'static WifiStack,
-    samples: &Samples,
+    samples: &mut Samples,
     baseline: i32,
     cfg: Config,
 ) -> Result<Config, &'static str> {
@@ -1233,7 +1233,18 @@ async fn publish_samples(
     }
 
     // --- State ---------------------------------------------------------------
-    for sample in samples {
+    // Taken here rather than in `collect_samples`, which runs before the radio
+    // comes up on a battery node: there is no association to measure yet at
+    // that point. By now the socket is connected, so the driver's stored value
+    // for the AP is the link this round actually published over.
+    if let Some(dbm) = rssi::read() {
+        let mut value = heapless::String::new();
+        rssi::write_dbm(&mut value, dbm);
+        info!("rssi = {} dBm", dbm);
+        platform::push_sample(samples, node::Slot::on(), "rssi", value);
+    }
+
+    for sample in samples.iter() {
         let topic = node.state_topic(sample.prefix, sample.reading.key);
         client
             .send_message(

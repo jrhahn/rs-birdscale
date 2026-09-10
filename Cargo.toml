@@ -58,6 +58,7 @@ hal = [
     "dep:esp-println",
     "dep:esp-alloc",
     "dep:esp-wifi",
+    "dep:esp-wifi-sys",
     "dep:esp-storage",
     "dep:embedded-storage",
     "dep:embassy-net",
@@ -93,6 +94,16 @@ esp-wifi = { version = "0.11.0", features = [
     "wifi",
     "utils",
     "esp-alloc",
+], optional = true }
+# The connected AP's RSSI. `esp-wifi` keeps its bindings in a private `binary`
+# module and exposes signal strength only through `AccessPointInfo`, i.e. only
+# from a scan -- which costs a radio sweep and disturbs the association. The
+# same generated bindings are a crate of their own, where
+# `esp_wifi_sta_get_ap_info` is public and reads the value the driver already
+# holds. Pinned to the version `esp-wifi` itself depends on, so features unify
+# and no second copy is built.
+esp-wifi-sys = { version = "0.7.1", features = [
+    "esp32c3",
 ], optional = true }
 embassy-net = { version = "0.4.0", features = [
     "tcp",

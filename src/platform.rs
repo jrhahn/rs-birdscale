@@ -44,9 +44,13 @@ use crate::sensors::{scd41, scd41::Scd41, sds011::Sds011, sht31, sht31::Sht31, R
 const SDS011_BAUD: u32 = 9600;
 
 /// Upper bound on the readings one round can produce: weight + probe
-/// temperature + SHT31 (2) + SCD41 (3) + SDS011 (2) + cell voltage, with
-/// headroom.
-pub const MAX_SAMPLES: usize = 12;
+/// temperature + SHT31 (2) + SCD41 (3) + SDS011 (2) + cell voltage + link
+/// RSSI, with headroom.
+///
+/// Kept in step with [`crate::discovery::MAX_ENTITIES`]: a node that announces
+/// an entity it then has no room to report would look broken in exactly the
+/// way that is hardest to see, because `push_sample` drops silently.
+pub const MAX_SAMPLES: usize = 14;
 
 /// One reading plus the node-level key prefix that disambiguates it (see
 /// [`Slot`]). The publish path turns this into `<ns>/<node>/<prefix><key>`.
