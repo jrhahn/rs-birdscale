@@ -231,6 +231,22 @@ pub fn config_topic(node: &NodeConfig, entity: &Entity) -> String<96> {
     t
 }
 
+/// A `"key":"value",` pair that disappears entirely when the value is empty.
+///
+/// Written as a `Display` rather than built into a string so it costs no buffer
+/// of its own on a node that is already counting bytes.
+struct OptionalMember(&'static str, &'static str);
+
+impl core::fmt::Display for OptionalMember {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.1.is_empty() {
+            Ok(())
+        } else {
+            write!(f, "\"{}\":\"{}\",", self.0, self.1)
+        }
+    }
+}
+
 /// The retained discovery payload for one entity, or `None` if it would not fit
 /// the buffer. Truncated JSON would be worse than no entity at all: Home
 /// Assistant would keep re-reading a broken retained config on every restart.
@@ -243,8 +259,7 @@ pub fn config_payload(node: &NodeConfig, entity: &Entity, avail: &Availability) 
          \"name\":\"{label}{sep}{name}\",\
          \"uniq_id\":\"{id}_{prefix}{key}\",\
          \"stat_t\":\"~/{prefix}{key}\",\
-         \"unit_of_meas\":\"{unit}\",\
-         \"dev_cla\":\"{dev_cla}\",\
+         {unit}{dev_cla}\
          \"stat_cla\":\"{stat_cla}\",\
          \"exp_aft\":{expire},{avty}",
         expire = avail.expire_for(slot),
@@ -268,8 +283,13 @@ pub fn config_payload(node: &NodeConfig, entity: &Entity, avail: &Availability) 
         name = desc.name,
         prefix = slot.prefix_for(desc.key),
         key = desc.key,
-        unit = desc.unit,
-        dev_cla = desc.device_class,
+        // Both are omitted when empty rather than sent as `""`. A count has
+        // neither a unit nor a device class, and Home Assistant validates
+        // `dev_cla` against its own list: an empty string is not in it, so the
+        // entity would be rejected outright instead of rendering as a plain
+        // number. An absent key is the way to say "none".
+        unit = OptionalMember("unit_of_meas", desc.unit),
+        dev_cla = OptionalMember("dev_cla", desc.device_class),
         stat_cla = desc.state_class,
     )
     .ok()?;
@@ -1102,6 +1122,29 @@ mod tests {
                 MAX_ENTITIES
             );
         }
+    }
+
+    #[test]
+    fn a_count_omits_the_unit_and_device_class_instead_of_sending_empties() {
+        let node = crate::node::by_name("terrasse").unwrap();
+        let avail = availability_of(&node);
+        let all = entities(&node);
+        let entity = all
+            .iter()
+            .find(|e| e.desc.key == "visits")
+            .expect("the visit counter is announced");
+        let payload = config_payload(&node, entity, &avail).expect("fits");
+
+        // `"dev_cla":""` is not a valid device class, and Home Assistant drops
+        // the whole entity over it rather than falling back to none.
+        assert!(!payload.contains("dev_cla"), "{payload}");
+        assert!(!payload.contains("unit_of_meas"), "{payload}");
+        assert!(payload.contains("\"stat_cla\":\"total_increasing\""), "{payload}");
+
+        // The omission must not have eaten a separator on the way out.
+        let parsed = parse(&payload);
+        assert_eq!(parsed["stat_t"], "~/visits");
+        assert_eq!(parsed["name"], "Vögel gesamt");
     }
 
     #[test]

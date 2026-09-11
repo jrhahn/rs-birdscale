@@ -66,7 +66,8 @@ use rust_mqtt::{
 
 use node::Provision;
 use rs_smarthome_nodes::{
-    battery, config, discovery, ds18b20, hx711, node, platform, presence, rssi, state, wifi,
+    battery, config, discovery, ds18b20, hx711, node, platform, presence, rssi, sensors::scale,
+    state, wifi,
 };
 
 use battery::Battery;
@@ -323,6 +324,7 @@ async fn main(spawner: Spawner) {
     // where a cold boot is already being detected.
     if state::is_cold_boot() {
         state::set_present_rounds(0);
+        state::set_visit_count(0);
     }
     state::mark_booted();
 
@@ -488,6 +490,10 @@ async fn run_battery(
                 raw, baseline, delta
             );
             state::set_bird_present(true);
+            // Counted here rather than after the publish: the rate limiter
+            // below drops arrivals that fall inside its 60 s window, and a
+            // second bird in half a minute is still a second bird.
+            state::count_visit();
 
             // Watch the whole visit with the CPU awake instead of deep-sleeping
             // between samples. This is what turns one arbitrary conversion per
@@ -896,6 +902,14 @@ async fn collect_samples(
         presence::write_secs(&mut secs, millis);
         info!("visit = {} s", secs);
         platform::push_sample(&mut samples, node.scale, "visit", secs);
+    }
+
+    // Published on every round, not only on a visit: the total is a running
+    // value and Home Assistant would let it expire between birds otherwise.
+    if node.scale.enabled {
+        let mut count = heapless::String::new();
+        scale::write_visits(&mut count, state::visit_count());
+        platform::push_sample(&mut samples, node.scale, "visits", count);
     }
 
     if let Some(probe) = board.probe.as_mut() {

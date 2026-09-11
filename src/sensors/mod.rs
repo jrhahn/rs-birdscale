@@ -290,8 +290,11 @@ mod tests {
 
     #[test]
     fn every_descriptor_is_complete() {
-        // An empty device_class or unit produces a valid-looking but useless
-        // Home Assistant entity.
+        // A measurement with no device class or unit produces a valid-looking
+        // but useless Home Assistant entity. A *count* is the exception: there
+        // is no device class for one and no unit to give it, and
+        // `config_payload` leaves both keys out rather than sending `""`, which
+        // Home Assistant would reject as an invalid device class.
         for descriptors in [
             scale::DESCRIPTORS,
             sht31::DESCRIPTORS,
@@ -303,8 +306,19 @@ mod tests {
         ] {
             for d in descriptors {
                 assert!(!d.key.is_empty() && !d.name.is_empty());
-                assert!(!d.unit.is_empty() && !d.device_class.is_empty());
-                assert_eq!(d.state_class, "measurement");
+                match d.state_class {
+                    "measurement" => assert!(
+                        !d.unit.is_empty() && !d.device_class.is_empty(),
+                        "{}: a measurement needs both",
+                        d.key
+                    ),
+                    "total_increasing" => assert!(
+                        d.unit.is_empty() && d.device_class.is_empty(),
+                        "{}: a count has neither",
+                        d.key
+                    ),
+                    other => panic!("{}: unexpected state class {other}", d.key),
+                }
                 // Keys end up in MQTT topics. Underscore is allowed *within* a
                 // key — a slot prefix already puts one there (`scd41_`), so the
                 // topics contain them either way — but never at an end, which

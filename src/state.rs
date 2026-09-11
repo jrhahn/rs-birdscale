@@ -47,6 +47,24 @@ static mut PRESENT_ROUNDS: u32 = 0;
 #[ram(rtc_fast, persistent)]
 static mut DISCOVERY_TAG: u32 = 0;
 
+/// Visits counted since the board last lost power entirely.
+///
+/// Counted at the *arrival*, not at the publish, which is the whole point of
+/// keeping it here rather than deriving it in Home Assistant: state topics go
+/// out at QoS0 without retain, and `presence_publish_allowed` deliberately
+/// drops arrivals that fall inside the 60 s rate limit. Both would undercount,
+/// silently, and a bird that comes back twice in half a minute is two visits.
+///
+/// RTC RAM rather than the flash blob on purpose. A visit is a frequent event —
+/// 75 of them on 2026-09-11 — and a flash write means erasing a sector, so
+/// counting in flash would spend the sector's endurance on nothing. Losing the
+/// total when the cell is swapped is the accepted cost: the entity is
+/// `total_increasing`, and Home Assistant treats a drop to zero as a counter
+/// reset rather than as negative consumption, so the long-term history it has
+/// already recorded survives the board forgetting.
+#[ram(rtc_fast, persistent)]
+static mut VISIT_COUNT: u32 = 0;
+
 /// Set once the baseline has been tared at least once.
 const FLAG_INIT: u32 = 1 << 0;
 /// Set while weight is above the presence threshold (edge detection).
@@ -138,6 +156,23 @@ pub fn present_rounds() -> u32 {
 /// Replace the consecutive-load counter.
 pub fn set_present_rounds(value: u32) {
     unsafe { core::ptr::addr_of_mut!(PRESENT_ROUNDS).write(value) }
+}
+
+/// Visits counted since the last full power loss.
+pub fn visit_count() -> u32 {
+    unsafe { core::ptr::addr_of!(VISIT_COUNT).read() }
+}
+
+/// Replace the visit counter. Used to zero it on a cold boot; every other
+/// caller wants [`count_visit`].
+pub fn set_visit_count(value: u32) {
+    unsafe { core::ptr::addr_of_mut!(VISIT_COUNT).write(value) }
+}
+
+/// Record one arrival. Saturating, so a board left running for years reports a
+/// stuck maximum rather than wrapping to zero and looking like a fresh install.
+pub fn count_visit() {
+    set_visit_count(visit_count().saturating_add(1));
 }
 
 /// Idle wake-ups accumulated since the last publish.
