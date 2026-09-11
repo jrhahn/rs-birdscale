@@ -778,7 +778,13 @@ KL_TOP = KL_FLOOR + KL_IN_H       # 27
 KL_BAF = 2.0
 KL_SENS_X = 22.0                  # sensor chamber depth
 KL_POST = 8.0
-KL_PILOT = 2.5                    # self-tapping M3, not an insert -- see WZ_PILOT
+# 4 mm for a heat-set M3 insert, which is the hole the common brass ones ask
+# for (4.6 mm outer, going into 4.0). That leaves 2.0 mm of post wall -- the
+# thinnest of the three boxes, because KL_POST cannot grow: KL_POST_XY is
+# derived from it, so a wider post would move the screws and the already
+# printed lid would no longer line up. Brass expands as it goes in, so check it
+# against the insert you actually have before printing.
+KL_PILOT = 4.0
 KL_POST_XY = [(sx * (KL_IN_X / 2 - KL_POST / 2), sy * (KL_IN_Y / 2 - KL_POST / 2))
               for sx in (-1, 1) for sy in (-1, 1)]
 
