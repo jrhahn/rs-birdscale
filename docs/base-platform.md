@@ -12,7 +12,7 @@ of sensors, selected with `NODE=<name>` at build time.
 | --- | --- | --- | --- |
 | `terrasse` (default) | Terrasse | load cell (HX711) + DS18B20 + SHT31-D | battery, deep-sleep |
 | `schlafzimmer` | Schlafzimmer | SCD41 + SHT31-D | mains, always-on |
-| `wohnzimmer` | Wohnzimmer | SCD41 + SHT31-D + SDS011 | mains (fan) |
+| `wohnzimmer` | Wohnzimmer | SCD41 + SHT31-D + SDS011 + SGP41 | mains (fan) |
 | `kueche` | Küche | SHT31-D | mains |
 | `bad` | Bad | SHT31-D | mains |
 | `terrasse` | Terrasse | none yet — every slot off while it is wired up | battery, deep-sleep |

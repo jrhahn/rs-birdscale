@@ -376,7 +376,12 @@ const WOHNZIMMER: NodeConfig = NodeConfig {
     sht31: Slot::on(),
     scd41: Slot::on_as("scd41_", "SCD41").keeping(&["co2"]),
     sds011: Slot::on().compensated().every(900),
-    sgp41: Slot::off(),
+    // The gas sensor lives here rather than anywhere else for two reasons that
+    // both point at this room: it has to be sampled at 1 Hz, which only a mains
+    // node can do, and a VOC index is a statement about the air people are in.
+    // `with_nox` announces the second channel; an SGP40 in the socket instead
+    // of an SGP41 is detected at boot and simply never feeds it.
+    sgp41: Slot::on().with_nox(),
     battery: Slot::off(),
     legacy_weight_topic: None,
 };

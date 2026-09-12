@@ -43,7 +43,7 @@ also be **provisioned** to another identity afterwards, without a rebuild — se
 | --- | --- | --- | --- |
 | `terrasse` (default) | Terrasse | HX711 load cell + SHT31-D + cell voltage | battery, deep sleep |
 | `schlafzimmer` | Schlafzimmer | SCD41 + SHT31-D | mains |
-| `wohnzimmer` | Wohnzimmer | SCD41 + SHT31-D + SDS011 | mains (fan) |
+| `wohnzimmer` | Wohnzimmer | SCD41 + SHT31-D + SDS011 + SGP41 | mains (fan) |
 | `kueche` | Küche | SHT31-D | mains |
 | `bad` | Bad | SHT31-D | mains |
 | `terrasse` | Terrasse | none yet — the board is on the network while it is wired up | battery, deep sleep |
@@ -395,7 +395,7 @@ and its entities without any YAML. Values are ready to use — grams, °C, %, pp
 | --- | --- |
 | `terrasse` | `smarthome/terrasse/weight`, `/temperature`, `/humidity` (SHT31-D), `/battery_voltage` — each appearing as its slot is switched on |
 | `schlafzimmer` | `smarthome/schlafzimmer/co2`, `/temperature`, `/humidity` (SHT31-D), `/scd41_temperature`, `/scd41_humidity` |
-| `wohnzimmer` | the same five, plus `/pm25`, `/pm10` (humidity-corrected) and `/pm25_raw`, `/pm10_raw` |
+| `wohnzimmer` | the same five, plus `/pm25`, `/pm10` (humidity-corrected), `/pm25_raw`, `/pm10_raw` and `/voc_index`, `/nox_index` |
 | `kueche` / `bad` | `smarthome/<node>/temperature`, `/humidity` |
 
 No node mirrors a weight to a second topic any more. The outdoor node used to,

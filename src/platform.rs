@@ -38,7 +38,9 @@ use log::{info, warn};
 use static_cell::StaticCell;
 
 use crate::node::{self, Slot};
-use crate::sensors::{scd41, scd41::Scd41, sds011::Sds011, sht31, sht31::Sht31, Reading, Sensor};
+use crate::sensors::{
+    scd41, scd41::Scd41, sds011::Sds011, sgp41, sgp41::Sgp41, sht31, sht31::Sht31, Reading, Sensor,
+};
 
 /// SDS011 baud rate (fixed in hardware).
 const SDS011_BAUD: u32 = 9600;
@@ -137,6 +139,11 @@ pub struct Sensors {
     sht31: Option<Sht31<SharedI2c>>,
     scd41: Option<Scd41<SharedI2c>>,
     sds011: Option<Sds011<Uart<'static, Async>>>,
+    /// Unlike every other driver here this one is not read once a round:
+    /// its hotplate only stays comparable while it is sampled at 1 Hz, so
+    /// [`Sensors::step_gas`] drives it between rounds and `measure_all`
+    /// merely collects whatever index those steps produced.
+    sgp41: Option<Sgp41<SharedI2c>>,
     /// Whether the I²C bring-up probe has already run this boot.
     probed: bool,
     /// Consecutive rounds the SCD41 produced nothing, and whether its self test
@@ -182,6 +189,10 @@ impl Sensors {
             (Some(bus), true) => Some(Scd41::new(bus, node.scd41_mode())),
             _ => None,
         };
+        let sgp41 = match (bus, node.sgp41.enabled) {
+            (Some(bus), true) => Some(Sgp41::new(bus)),
+            _ => None,
+        };
 
         let sds011 = if node.uses_uart() {
             // A UART that fails to configure is a wiring/build mistake, not a
@@ -209,6 +220,7 @@ impl Sensors {
             sht31,
             scd41,
             sds011,
+            sgp41,
             probed: false,
             scd41_empty_rounds: 0,
             scd41_self_tested: false,
@@ -231,6 +243,27 @@ impl Sensors {
     /// [`Sensors::measure_all`], where the SHT31 has just been read.
     pub fn set_sds011_kappa(&mut self, centi: u32) {
         self.kappa_centi = centi;
+    }
+
+    /// One 1 Hz step of the gas sensor. A no-op on a node without one.
+    ///
+    /// This exists because the SGP4x is the one part here that cannot be read
+    /// once a round: what it returns is a hotplate resistance, comparable only
+    /// while the heater keeps running, and Sensirion's index algorithm is
+    /// specified for a 0.5-10 s interval. Sampled once a minute it would yield
+    /// a number that looks like a VOC index and is not one -- so the caller
+    /// ticks this every second between publishes and `measure_all` only reports
+    /// what the ticks computed.
+    pub async fn step_gas(&mut self) {
+        if let Some(s) = self.sgp41.as_mut() {
+            s.sample_once().await;
+        }
+    }
+
+    /// Whether this node has a gas sensor at all, so the caller can skip the
+    /// 1 Hz loop entirely rather than ticking a `None` once a second.
+    pub fn has_gas_sensor(&self) -> bool {
+        self.sgp41.is_some()
     }
 
     /// Ask each expected I²C address whether anything is there, and say so in
@@ -301,6 +334,29 @@ impl Sensors {
             } else {
                 missing = true;
                 warn!("no SCD41 at 0x{:02X}", scd41::ADDR);
+            }
+        }
+
+        if self.sgp41.is_some() {
+            // `detect` is what the sampling path uses anyway, and it answers a
+            // question a bare ACK cannot: an SGP40 and an SGP41 share this
+            // address, and only one of them has a NOx channel. Breakout
+            // listings mix the two up routinely, so the boot log is the place
+            // to find out which one is actually fitted.
+            if let Some(s) = self.sgp41.as_mut() {
+                match s.detect().await {
+                    Some(part) => {
+                        info!("{:?} found at 0x{:02X}", part, sgp41::ADDR);
+                        match s.serial_number().await {
+                            Some(serial) => info!("SGP4x serial 0x{:012X}", serial),
+                            None => warn!("SGP4x gave no serial number"),
+                        }
+                    }
+                    None => {
+                        missing = true;
+                        warn!("no SGP4x at 0x{:02X}", sgp41::ADDR);
+                    }
+                }
             }
         }
 
@@ -396,6 +452,42 @@ impl Sensors {
                 }
             }
         }
+        // Compensation before collection, and from this round's air: the
+        // hotplate's response depends on ambient temperature and humidity, and
+        // the driver holds the last values it was given until the next round.
+        // Skipped when the SHT31 said nothing, because the defaults inside the
+        // driver are better than a figure from a different hour.
+        if let (Some(gas), Some(sht31)) = (self.sgp41.as_mut(), self.sht31.as_ref()) {
+            if let (Some(rh), Some(t)) = (
+                sht31.last_humidity_tenths(),
+                sht31.last_temperature_tenths(),
+            ) {
+                gas.compensate(rh, t);
+            }
+        }
+
+        // Whatever the 1 Hz steps have computed. Empty for the first 45 seconds
+        // after a boot (the algorithm's blackout) and while the SGP41 runs its
+        // conditioning phase, which is a quiet start rather than a fault -- so
+        // unlike `collect` there is no warning here.
+        if let Some(gas) = self.sgp41.as_ref() {
+            let readings = gas.readings();
+            if readings.is_empty() {
+                if let Some(why) = gas.fault() {
+                    warn!("SGP4x {}; skipping its index", why);
+                }
+            }
+            for reading in readings {
+                info!(
+                    "SGP4x: {}{} = {}",
+                    node.sgp41.prefix_for(reading.key),
+                    reading.key,
+                    reading.value
+                );
+                push_sample(out, node.sgp41, reading.key, reading.value);
+            }
+        }
+
         if let Some(s) = self.sds011.as_mut() {
             if due(round, node.sds011, &node) {
                 if node.sds011.compensated && humidity.is_none() {

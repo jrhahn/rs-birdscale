@@ -284,7 +284,7 @@ wiring, supply or placement rather than the part
 
 ---
 
-## `NODE=wohnzimmer` — SCD41, SHT31-D **and** SDS011
+## `NODE=wohnzimmer` — SCD41, SHT31-D, SDS011 **and** SGP41
 
 The busiest mains node, and the only one on two buses at once. Build the
 `schlafzimmer` node above first — the I²C half is identical, down to the
@@ -403,10 +403,18 @@ Condensation ruins both the reading and the hardware.
 
 ```
 node 'wohnzimmer' (Wohnzimmer) booted, mains profile
+wifi: 'your-network' (built in)
 SHT31-D found at 0x44
 SCD41 found at 0x62
-SCD41 serial 0x41AC3D073BD4
+SCD41 serial 0x4E7003073BC3
+Sgp41 found at 0x59
+SGP4x serial 0x000005A5F259
 ```
+
+`Sgp41` and not `Sgp40` on that line matters: the two parts share the address
+and most of the command set, and only the SGP41 has a NOx channel. The driver
+asks once and remembers, so a board that turns out to carry an SGP40 publishes
+one index instead of two rather than inventing the second.
 
 Nothing about the SDS011 — it is only touched on a round of its own. What you
 should *not* see is:
@@ -434,6 +442,55 @@ SDS011: pm10 = 74.1
 
 The corrected values being *below* the raw ones is the expected direction: the
 correction only ever removes water, never adds particles.
+
+### SGP41 → XIAO
+
+The gas sensor joins the I²C bus the other two are already on. Nothing is
+strapped and nothing collides: the SCD41 is fixed at `0x62`, the SHT31-D sits at
+`0x44`/`0x45`, the SGP4x at `0x59`.
+
+| SGP41 pin | XIAO pad | GPIO | Note |
+| --- | --- | --- | --- |
+| VDD | 3V3 | — | see *Supply* below |
+| GND | GND | — | |
+| SDA | D4 | 6 | third device on the bus |
+| SCL | D5 | 7 | |
+
+**Supply.** The part heats a metal-oxide plate, and that is the whole current
+budget: about 50 mA while the hotplate pulse runs, a few microamps between. At
+one sample a second the average lands near 3 mA, so it changes nothing on a
+mains node — but it is a pulsed load on the same 3V3 the SCD41 pulses on, and
+the SCD41's ripple budget is tight (see the bedroom section). Give it its own
+short pair back to the XIAO rather than daisy-chaining it through the SCD41's.
+
+### Why the gas sensor is on this node
+
+Because it is the only one that can sample it correctly. What the SGP4x returns
+is a hotplate resistance, comparable only while the heater keeps running, and
+Sensirion's index algorithm is specified for a 0.5–10 s interval. The firmware
+ticks it **once a second** between publish rounds (`GAS_STEP_INTERVAL` in
+`main.rs`). A battery node is asleep between rounds and could not do that at
+all; a node sampled once a minute would publish a number that looks like a VOC
+index and is not one.
+
+The second reason is the same as the SDS011's: this is the room people sit in,
+and a VOC index is a statement about the air they are in.
+
+### What the index is, and is not
+
+1 to 500, where **100 is the running average of roughly the last 24 hours in
+this room**. It is not a concentration: there is no µg/m³ and no ppb behind it,
+because a metal-oxide film responds to a mixture and the same resistance can
+mean very different mixtures. What it is good for is *change* — cooking,
+cleaning products, a room that has not been aired — against this room's own
+recent normal.
+
+That also means a fresh boot has nothing to say for about a minute: ten
+conditioning steps, then the algorithm's 45-second blackout, and only then does
+`voc_index` appear in a publish. Silence in that window is the sensor working.
+
+**NOx will read its floor indoors, more or less for ever.** NOx comes from
+combustion; a flat NOx index is the channel working, not failing.
 
 ---
 

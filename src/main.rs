@@ -195,6 +195,15 @@ const WIFI_BUDGET: Duration = Duration::from_secs(20);
 /// [`WIFI_BUDGET`].
 const SHUTDOWN_BUDGET: Duration = Duration::from_secs(2);
 
+/// Cadence of the gas sensor's sampling step.
+///
+/// Sensirion's index algorithm is specified for a 0.5-10 s interval and
+/// configured here for exactly one second (`sgp41::SAMPLING_INTERVAL_SECS`), so
+/// this is not a tuning knob: changing it without changing that constant makes
+/// the index wrong rather than coarse. The step itself takes ~50 ms, so the
+/// wait is what sets the pace.
+const GAS_STEP_INTERVAL: Duration = Duration::from_secs(1);
+
 /// Hard cap on how long one visit keeps the node awake.
 ///
 /// A bird is expected to leave well inside this. The cap exists for a load that
@@ -844,7 +853,31 @@ async fn run_awake(
             enter_deep_sleep(lpwr, cfg.idle_interval());
         }
 
-        Timer::after(Duration::from_secs(sample_period_secs(&cfg))).await;
+        wait_for_next_round(sample_period_secs(&cfg), board).await;
+    }
+}
+
+/// Sleep until the next round -- but tick the gas sensor while doing it.
+///
+/// A node without one simply waits. A node with one cannot: the SGP4x reports a
+/// hotplate resistance that is only comparable while the heater keeps running,
+/// and Sensirion specifies the index algorithm for a 0.5-10 s interval. Ticking
+/// it once a second through the gap is what makes the published index an index;
+/// sampling it once a round would produce a plausible-looking number that means
+/// nothing. Each step costs about 50 ms of bus time, so a second is spent
+/// waiting either way.
+///
+/// Only reachable from the stay-awake loop, which is where a mains node lives.
+/// A battery node is asleep between rounds and could not tick anything, which
+/// is the other half of why the gas sensor belongs on mains.
+async fn wait_for_next_round(secs: u64, board: &mut Board<'_>) {
+    if !board.sensors.has_gas_sensor() {
+        Timer::after(Duration::from_secs(secs)).await;
+        return;
+    }
+    for _ in 0..secs {
+        board.sensors.step_gas().await;
+        Timer::after(GAS_STEP_INTERVAL).await;
     }
 }
 

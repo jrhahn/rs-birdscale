@@ -98,6 +98,7 @@ pub struct Sht31<I2C> {
     /// figure rather than the formatted [`Reading`], so the correction does not
     /// have to parse back a string it just printed.
     last_rh_tenths: Option<i32>,
+    last_t_tenths: Option<i32>,
 }
 
 #[cfg(feature = "drivers")]
@@ -108,6 +109,7 @@ impl<I2C: I2cBus> Sht31<I2C> {
             i2c,
             addr: ADDR,
             last_rh_tenths: None,
+            last_t_tenths: None,
         }
     }
 
@@ -117,6 +119,7 @@ impl<I2C: I2cBus> Sht31<I2C> {
             i2c,
             addr,
             last_rh_tenths: None,
+            last_t_tenths: None,
         }
     }
 
@@ -125,6 +128,15 @@ impl<I2C: I2cBus> Sht31<I2C> {
     /// caller can tell "the room is dry" from "the sensor did not answer".
     pub fn last_humidity_tenths(&self) -> Option<i32> {
         self.last_rh_tenths
+    }
+
+    /// Temperature from the last round, in tenths of a degree.
+    ///
+    /// Kept for the same reason as the humidity beside it, and used by the same
+    /// kind of caller: the SGP4x compensates its hotplate against ambient
+    /// conditions, and wants both halves from air measured at the same moment.
+    pub fn last_temperature_tenths(&self) -> Option<i32> {
+        self.last_t_tenths
     }
 
     /// Put the sensor back into a known state, and wait out the datasheet's
@@ -182,10 +194,12 @@ impl<I2C: I2cBus> Sensor for Sht31<I2C> {
         // A missing or mis-wired sensor simply contributes nothing; the caller
         // logs it and publishes whatever else answered.
         self.last_rh_tenths = None;
+        self.last_t_tenths = None;
         if let Some((t_raw, rh_raw)) = self.sample().await {
             Self::push(&mut out, "temperature", temp_tenths(t_raw));
             Self::push(&mut out, "humidity", rh_tenths(rh_raw));
             self.last_rh_tenths = Some(rh_tenths(rh_raw));
+            self.last_t_tenths = Some(temp_tenths(t_raw));
         }
         out
     }
