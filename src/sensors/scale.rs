@@ -33,8 +33,16 @@ pub const DESCRIPTORS: &[EntityDescriptor] = &[
     // and the individual visits are gone with the 10-day raw history.
     //
     // Named for the birds rather than for the mechanism: the panel's Zuhause
-    // screen picks up any entity with `Vogel` in its name and reads `heute` or
-    // `gesamt` from the rest (see `trmnl/README.md` in home-server).
+    // screen has no device_class to go on here, so it picks the counter out by
+    // name -- `vogel` or `vögel`, compared in lower case -- and reads `heute`
+    // or `gesamt` from the rest (see `trmnl/README.md` in home-server).
+    //
+    // The umlaut is why that rule accepts two spellings. It used to test for
+    // `Vogel` exactly, this name has been `Vögel gesamt` since the counter
+    // existed, and Liquid's `contains` compares bytes: the panel showed no
+    // count at all, silently, because a filter that keeps nothing looks like a
+    // sensor that sends nothing. Renaming this entity is still free, but the
+    // panel is the thing to check when it happens.
     EntityDescriptor {
         key: "visits",
         name: "Vögel gesamt",
