@@ -20,6 +20,8 @@
 
 use esp_hal::macros::ram;
 
+use crate::sensors::scale;
+
 /// Last known empty-house reading, in raw HX711 ticks.
 #[ram(rtc_fast, persistent)]
 static mut BASELINE: i32 = 0;
@@ -64,6 +66,14 @@ static mut DISCOVERY_TAG: u32 = 0;
 /// already recorded survives the board forgetting.
 #[ram(rtc_fast, persistent)]
 static mut VISIT_COUNT: u32 = 0;
+
+/// Companion to [`VISIT_COUNT`], holding it XORed with
+/// [`scale::VISITS_MAGIC`]. The pair is what makes the counter survivable: a
+/// word that has just been added to the firmware comes up holding leftover
+/// memory, and a reflash is not a cold boot, so there is no moment at which
+/// zeroing it would have been reliable. See that constant for the full story.
+#[ram(rtc_fast, persistent)]
+static mut VISIT_CHECK: u32 = 0;
 
 /// Set once the baseline has been tared at least once.
 const FLAG_INIT: u32 = 1 << 0;
@@ -158,15 +168,21 @@ pub fn set_present_rounds(value: u32) {
     unsafe { core::ptr::addr_of_mut!(PRESENT_ROUNDS).write(value) }
 }
 
-/// Visits counted since the last full power loss.
+/// Visits counted since the last full power loss, or zero if the stored pair
+/// does not agree -- which is what leftover RTC memory looks like.
 pub fn visit_count() -> u32 {
-    unsafe { core::ptr::addr_of!(VISIT_COUNT).read() }
+    let value = unsafe { core::ptr::addr_of!(VISIT_COUNT).read() };
+    let check = unsafe { core::ptr::addr_of!(VISIT_CHECK).read() };
+    scale::visits_from_pair(value, check)
 }
 
-/// Replace the visit counter. Used to zero it on a cold boot; every other
-/// caller wants [`count_visit`].
+/// Replace the visit counter, writing both halves of the pair so the next read
+/// trusts it. Every caller that wants to *record* a visit wants [`count_visit`].
 pub fn set_visit_count(value: u32) {
-    unsafe { core::ptr::addr_of_mut!(VISIT_COUNT).write(value) }
+    unsafe {
+        core::ptr::addr_of_mut!(VISIT_COUNT).write(value);
+        core::ptr::addr_of_mut!(VISIT_CHECK).write(scale::visits_check(value));
+    }
 }
 
 /// Record one arrival. Saturating, so a board left running for years reports a

@@ -324,6 +324,10 @@ async fn main(spawner: Spawner) {
     // where a cold boot is already being detected.
     if state::is_cold_boot() {
         state::set_present_rounds(0);
+        // Belt and braces only: the visit counter guards itself with a checked
+        // pair, because this branch cannot cover the case that actually bit --
+        // a reflash keeps RTC RAM, so the first boot carrying a *new* counter
+        // is not a cold boot. See `scale::VISITS_MAGIC`.
         state::set_visit_count(0);
     }
     state::mark_booted();

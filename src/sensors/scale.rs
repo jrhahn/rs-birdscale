@@ -51,6 +51,34 @@ pub const DESCRIPTORS: &[EntityDescriptor] = &[
     },
 ];
 
+/// Distinguishes a real visit count in RTC RAM from uninitialised memory.
+///
+/// A `#[ram(rtc_fast, persistent)]` word is never zeroed by the startup code,
+/// so one that has just been *added to the firmware* comes up holding whatever
+/// was in that slot. A cold-boot check does not cover it: a reflash preserves
+/// RTC RAM (see FLASHING.md), so the first boot on new firmware is not a cold
+/// boot and the counter came up at 2 345 324 652 on the terrace node.
+///
+/// The count is therefore stored twice -- the value and this magic XORed with
+/// it. Two independent words of leftover memory agreeing by chance is a 1 in
+/// 2^32 event, and the pair repairs itself: an inconsistent one reads as zero,
+/// and the next write makes it consistent again.
+pub const VISITS_MAGIC: u32 = 0x5669_7369; // "Visi"
+
+/// The companion word to store beside `count`.
+pub const fn visits_check(count: u32) -> u32 {
+    count ^ VISITS_MAGIC
+}
+
+/// What a stored pair means: the count, or zero if the two disagree.
+pub const fn visits_from_pair(count: u32, check: u32) -> u32 {
+    if check == visits_check(count) {
+        count
+    } else {
+        0
+    }
+}
+
 /// Format the visit counter for MQTT.
 ///
 /// A bare integer. Home Assistant needs no unit to treat a `total_increasing`
@@ -72,6 +100,40 @@ mod tests {
             .expect("the visit counter is announced");
         assert_eq!(d.state_class, "total_increasing");
         assert!(d.name.contains("Vögel"), "the panel matches on the name");
+    }
+
+    #[test]
+    fn a_consistent_pair_reads_back_as_itself() {
+        for n in [0u32, 1, 75, 4_294_967_295] {
+            assert_eq!(visits_from_pair(n, visits_check(n)), n);
+        }
+    }
+
+    #[test]
+    fn leftover_rtc_memory_reads_as_zero() {
+        // The value the terrace node actually came up with after the reflash
+        // that introduced the counter, and a few other shapes of garbage.
+        for (value, check) in [
+            (2_345_324_652u32, 0u32),
+            (2_345_324_652, 2_345_324_652),
+            (0, 0xDEAD_BEEF),
+            (0xFFFF_FFFF, 0xFFFF_FFFF),
+            (12, 13),
+        ] {
+            assert_eq!(
+                visits_from_pair(value, check),
+                0,
+                "value {value:#x} check {check:#x} must not be trusted"
+            );
+        }
+    }
+
+    #[test]
+    fn the_magic_does_not_make_zero_look_valid_by_accident() {
+        // A pair of zeroed words is the one shape leftover memory takes often,
+        // so it must be rejected rather than read as "no visits yet".
+        assert_ne!(visits_check(0), 0);
+        assert_eq!(visits_from_pair(0, 0), 0);
     }
 
     #[test]
