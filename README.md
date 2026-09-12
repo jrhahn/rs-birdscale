@@ -206,8 +206,8 @@ until ~2.4 V, far past where a LiPo starts losing capacity for good.
 
 ## Enclosure
 
-[`models.py`](models.py) is the CadQuery source for the printed parts: three
-enclosures in six pieces, plus the two bending-beam clamps the bird scale hangs
+[`models.py`](models.py) is the CadQuery source for the printed parts: four
+enclosures in eight pieces, plus the two bending-beam clamps the bird scale hangs
 from. The clamps the file *started* as were retired in `f858d60` and are not
 these — `git show d0df819:models.py` still has the originals, which put the wire
 hole where the bar puts it rather than on the box's centre line.

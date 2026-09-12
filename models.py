@@ -865,3 +865,159 @@ _export(kl_lid, "climate_lid")
 
 print("climate kl_tray %.1f cm3  kl_lid %.1f cm3" % (
     kl_tray.val().Volume() / 1000.0, kl_lid.val().Volume() / 1000.0))
+
+
+## ===========================================================================
+## Schlafzimmer — indoor housing for the CO2 node
+## ===========================================================================
+##
+## Two printed parts:
+##
+##   schlafzimmer_tray   floor, walls and the two compartments
+##   schlafzimmer_lid    flat cover, four screws, vented over the stack
+##
+## Same two-compartment idea as the Kueche/Bad box, but the contents are not
+## the same shape at all. Here the SCD41 breakout is *stacked on the XIAO* --
+## one 60 x 20 x 35 assembly, measured with the jumper headers on top -- and
+## only the SHT31-D hangs off it on wires. So the long axis is set by that
+## stack, not by three compartments in a row.
+##
+## What the stack costs, and why it is accepted: `wiring.md` asks for "both
+## sensors in the same air, both away from the board", and a stacked SCD41 is
+## by definition neither. That is the hardware in hand, and it is not as bad
+## as it sounds -- the offset calibration is a *difference* of two
+## temperatures, so a constant gap between the two chambers is exactly what
+## the 4 C offset absorbs. What a fixed offset cannot absorb is a *varying*
+## one, so the design spends its effort on getting the board's heat out of the
+## box rather than on pretending the two sensors share air:
+##
+##   - the stack bay is vented on both long walls, low for the inlet and twice
+##     again at 26 and 32 mm, which is where the SCD41 rides on top of the
+##     stack. Those upper rows are the cross-draught over the sensor itself.
+##   - the lid is slotted over the bay. That is the chimney's outlet, and it
+##     is also the answer to "not inside a sealed enclosure": the CO2 sensor
+##     needs room air, not box air, and 6 mm of still plastic above it would
+##     have given it the second.
+##   - the lid slots run along X, not across it. Both are equally open; only
+##     one leaves the material between them running the full 108 mm, and a
+##     lid this long with screws only in its corners needs that.
+##   - the SHT31 keeps its own vented chamber behind a full-height baffle, as
+##     in every other box in this file. It is the reference thermometer; it
+##     has no business downwind of the stack.
+##
+## Print both parts flat on the plate, tray floor down.
+
+SZ_X, SZ_Y, SZ_Z = 108.0, 40.0, 44.0
+SZ_WALL, SZ_FLOOR, SZ_LID = 2.5, 3.0, 3.0
+
+SZ_IN_X = SZ_X - 2 * SZ_WALL        # 103
+SZ_IN_Y = SZ_Y - 2 * SZ_WALL        # 35
+SZ_IN_H = SZ_Z - SZ_FLOOR - SZ_LID  # 38, i.e. 3 mm over the stack
+SZ_TOP = SZ_FLOOR + SZ_IN_H         # 41, where the lid lands
+
+SZ_BAF = 2.0
+SZ_SENS_X = 22.0                    # sensor chamber depth, as on the KL box
+
+# The stack, measured (60 x 20 x 35) plus clearance. Height is the one that
+# must not be trimmed: it is what decides SZ_Z, and the jumper headers on top
+# are already counted in the 35.
+STACK_X, STACK_Y, STACK_Z = 62.0, 23.0, 35.0
+SZ_SLACK = 8.0                      # wire loop between baffle and stack
+SZ_RIB = 6.0                        # corral around the lower board
+
+SZ_X0 = -SZ_IN_X / 2                    # -51.5
+SZ_SENS_X1 = SZ_X0 + SZ_SENS_X          # -29.5
+SZ_STACK_X0 = SZ_SENS_X1 + SZ_BAF + SZ_SLACK   # -19.5
+SZ_STACK_X1 = SZ_STACK_X0 + STACK_X            # 42.5
+SZ_STACK_XC = (SZ_STACK_X0 + SZ_STACK_X1) / 2  # 11.5
+
+SZ_POST = 8.0
+# 3.5 mm as specified for M2.5 inserts. That is right for the common
+# M2.5 x 4.0 OD insert and 0.5 mm too wide for a 3.5 OD one -- brass has to
+# displace plastic to hold, so check the insert you actually have against the
+# hole before melting four of them in.
+SZ_PILOT = 3.5
+# M2.5 countersunk: 2.9 clearance, head 4.7 plus a lip.
+SZ_CLEAR, SZ_CSK = 2.9, 5.7
+SZ_POST_XY = [(sx * (SZ_IN_X / 2 - SZ_POST / 2), sy * (SZ_IN_Y / 2 - SZ_POST / 2))
+              for sx in (-1, 1) for sy in (-1, 1)]
+# Posts reach x = +-43.5 inboard, which is the 1 mm the stack bay stops short
+# of. The USB plug then leaves between the two +X posts, 19 mm apart.
+
+# ---------------------------------------------------------------------------
+# Tray
+# ---------------------------------------------------------------------------
+sz_tray = _box(SZ_X, SZ_Y, SZ_TOP).edges("|Z").fillet(CORNER_R)
+sz_tray = sz_tray.cut(_box(SZ_IN_X, SZ_IN_Y, SZ_IN_H, (0, 0, SZ_FLOOR)))
+
+# Baffle, with a full-height notch for the four wires to the SHT31.
+sz_tray = sz_tray.union(_box(SZ_BAF, SZ_IN_Y, SZ_IN_H,
+                       (SZ_SENS_X1 + SZ_BAF / 2, 0, SZ_FLOOR)))
+sz_tray = sz_tray.cut(
+    _box(3 * SZ_BAF, 8.0, SZ_IN_H, (SZ_SENS_X1 + SZ_BAF / 2, 0, SZ_FLOOR))
+)
+
+# Sensor chamber: -X end and both long walls, kept inboard of the corner posts
+# so the slots open onto air rather than onto a post.
+for z in (6.0, 13.0, 20.0, 27.0, 33.0):
+    sz_tray = sz_tray.cut(_box(3 * SZ_WALL, 18.0, SLOT_W, (SZ_X0, 0, SZ_FLOOR + z)))
+    for sy in (-1, 1):
+        sz_tray = sz_tray.cut(_box(10.0, 3 * SZ_WALL, SLOT_W,
+                              (-38.0, sy * SZ_IN_Y / 2, SZ_FLOOR + z)))
+
+# Card slot for the SHT31 breakout, standing on edge across the chamber.
+sz_tray = sz_tray.union(_box(6.0, 18.0, 6.0, (SZ_X0 + SZ_SENS_X / 2, 0, SZ_FLOOR)))
+sz_tray = sz_tray.cut(_box(2.0, 22.0, 5.0, (SZ_X0 + SZ_SENS_X / 2, 0, SZ_FLOOR + 1.5)))
+
+# Stack bay: inlet low, outlets at the two heights the SCD41 rides at.
+for z in (5.0, 26.0, 32.0):
+    for sy in (-1, 1):
+        sz_tray = _slots(sz_tray, 3, 20.0, (16.0, 3 * SZ_WALL, SLOT_W),
+                         (SZ_STACK_XC, sy * SZ_IN_Y / 2, SZ_FLOOR + z), axis="x")
+
+# Corral for the lower board. Closed on three sides; the +X end is two stubs
+# with a USB_W gap between them, because a full rib there would stand in front
+# of the USB-C plug.
+sz_tray = sz_tray.union(_box(SZ_BAF, STACK_Y + 2 * SZ_BAF, SZ_RIB,
+                       (SZ_STACK_X0 - SZ_BAF / 2, 0, SZ_FLOOR)))
+for sy in (-1, 1):
+    sz_tray = sz_tray.union(_box(STACK_X + 2 * SZ_BAF, SZ_BAF, SZ_RIB,
+                           (SZ_STACK_XC, sy * (STACK_Y + SZ_BAF) / 2, SZ_FLOOR)))
+    sz_tray = sz_tray.union(_box(SZ_BAF, (STACK_Y - USB_W) / 2, SZ_RIB,
+                           (SZ_STACK_X1 + SZ_BAF / 2,
+                            sy * (USB_W + (STACK_Y - USB_W) / 2) / 2, SZ_FLOOR)))
+
+# Cable out, sized for a USB-C plug's overmould.
+sz_tray = sz_tray.cut(_box(3 * SZ_WALL, USB_W, USB_H, (SZ_IN_X / 2, 0, SZ_FLOOR + 0.5)))
+
+for (px, py) in SZ_POST_XY:
+    sz_tray = sz_tray.union(_box(SZ_POST, SZ_POST, SZ_IN_H, (px, py, SZ_FLOOR)))
+    sz_tray = sz_tray.cut(
+        cq.Workplane("XY").circle(SZ_PILOT / 2).extrude(SZ_IN_H)
+        .translate((px, py, SZ_FLOOR))
+    )
+
+display(sz_tray)
+_export(sz_tray, "schlafzimmer_tray")
+
+# ---------------------------------------------------------------------------
+# Lid
+# ---------------------------------------------------------------------------
+# Edge break first: once the vent slots are cut, `>Z` edges are no longer just
+# the outline, and a 1.5 mm fillet on the 3 mm web between two slots is not a
+# fillet, it is a failed kernel call.
+sz_lid = _box(SZ_X, SZ_Y, SZ_LID).edges("|Z").fillet(CORNER_R)
+sz_lid = sz_lid.faces(">Z").edges().fillet(TOP_BREAK)
+sz_lid = _slots(sz_lid, 5, 6.0, (40.0, 3.0, SZ_LID + 2),
+                (SZ_STACK_XC, 0, -1.0), axis="y")
+sz_lid = (
+    sz_lid.faces(">Z").workplane()
+    .pushPoints(SZ_POST_XY)
+    .cskHole(SZ_CLEAR, SZ_CSK, 90)
+)
+
+display(sz_lid)
+_export(sz_lid, "schlafzimmer_lid")
+
+print("schlafzimmer sz_tray %.1f cm3  sz_lid %.1f cm3" % (
+    sz_tray.val().Volume() / 1000.0, sz_lid.val().Volume() / 1000.0))
