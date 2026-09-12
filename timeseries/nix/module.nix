@@ -211,11 +211,14 @@ in
     };
     users.groups.questdb = lib.mkIf cfg.questdb.enable { };
 
-    boot.kernel.sysctl = lib.mkIf cfg.questdb.enable {
-      # Both are checked by QuestDB at start-up; the defaults on a small
-      # machine are below what it wants for its memory-mapped columns.
-      "vm.max_map_count" = lib.mkDefault 1048576;
-      "fs.file-max" = lib.mkDefault 1048576;
-    };
+    # No sysctl settings here, and that is not an oversight. QuestDB checks
+    # `vm.max_map_count` and `fs.file-max` at start-up because its columns are
+    # memory-mapped files, and NixOS already sets the first to exactly the
+    # 1048576 it wants (`nixos/modules/config/sysctl.nix`, for unrelated
+    # reasons) while the second is derived from RAM on any machine large enough
+    # to run a database at all. Setting them again here is not harmless: a
+    # second `mkDefault` at the same priority is a conflict, not a duplicate,
+    # and the evaluation fails with "defined multiple times" -- which is how
+    # this was found, on the first real build.
   };
 }
