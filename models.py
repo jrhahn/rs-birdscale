@@ -785,8 +785,17 @@ KL_POST = 8.0
 # printed lid would no longer line up. Brass expands as it goes in, so check it
 # against the insert you actually have before printing.
 KL_PILOT = 4.0
-KL_POST_XY = [(sx * (KL_IN_X / 2 - KL_POST / 2), sy * (KL_IN_Y / 2 - KL_POST / 2))
-              for sx in (-1, 1) for sy in (-1, 1)]
+# Measured, not derived -- the same reason BOSS_XY is pinned on the terrace box.
+# Flush against the inner walls the centres come out at (26.0, 13.0), and a test
+# fit of the printed pair showed the lid would not sit down: the holes had to
+# move 1.0 mm further apart along the length and 1.5 mm across the width. That
+# is 5.7 % on the short axis, far too much for PLA shrinkage (~0.3 %), so it is
+# not a tolerance to be dialled out -- it is measured and stays measured.
+#
+# The posts now overlap the side walls by 0.5 / 0.75 mm. That is harmless, they
+# are unioned into them; what it costs is lid material, 2.7 mm between the
+# countersink and the long edge and 2.45 mm on the short one, down from 3.2.
+KL_POST_XY = [(sx * 26.5, sy * 13.75) for sx in (-1, 1) for sy in (-1, 1)]
 
 KL_X0 = -KL_IN_X / 2              # -30
 KL_SENS_X1 = KL_X0 + KL_SENS_X    # -8
