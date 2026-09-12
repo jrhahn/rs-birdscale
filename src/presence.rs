@@ -79,6 +79,14 @@ pub const MIN_PUBLISH_GAP_SECS: u32 = 60;
 /// a step from a visitor; ten minutes is the evidence it lacks.
 pub const STUCK_AFTER_SECS: u32 = 600;
 
+// Eleven hours is what the flapping night cost. Whatever this constant becomes,
+// it has to stay a small fraction of that, and long enough that a bird may
+// legitimately linger. Checked at compile time rather than in a test: it is a
+// claim about a constant, so the right failure is a build that stops, and
+// `assert!` over a constant inside a test is a value clippy folds away anyway.
+const _: () = assert!(STUCK_AFTER_SECS <= 3600, "not a bound on a night");
+const _: () = assert!(STUCK_AFTER_SECS >= 120, "a bird may legitimately linger");
+
 /// Whole rounds of `round_secs` needed to cover `secs`, at least one.
 ///
 /// Rounded up: the loop only wakes on its own cadence, so a budget between two
@@ -101,6 +109,36 @@ pub const fn rounds_for(secs: u32, round_secs: u32) -> u32 {
 /// heartbeat already keeps.
 pub const fn may_publish(rounds_since_publish: u32, gap_rounds: u32) -> bool {
     rounds_since_publish >= gap_rounds
+}
+
+/// Shortest load that is counted as a visit, in milliseconds.
+///
+/// The counter used to increment on the rising edge, before anyone knew how
+/// long the load would stay. That counts a bird, and it also counts every
+/// bounce: on 2026-09-12 the terrace reported 193 arrivals in ten hours, and
+/// the durations published alongside them included 0.0, 0.1 and 0.3 seconds --
+/// touches, not meals. The weights in the same window were credible (7 to 18 g,
+/// which is a blue tit to a great tit), so the cell was not imagining loads;
+/// the edge simply is not evidence of a visit yet.
+///
+/// One second is chosen against [`crate::VISIT_SETTLE`] rather than against
+/// birds: samples in the first 400 ms are thrown away as ringing, so a visit
+/// shorter than that has *no* settled reading behind it and its published
+/// weight is whichever conversion tripped the threshold. At one second there
+/// are always at least 600 ms of settled samples, which makes "counted" and
+/// "has a real weight" the same set.
+///
+/// This does not make the count a count of *birds*. One bird that hops off and
+/// back on is still two, and the entity is named for what it measures.
+pub const MIN_COUNTED_VISIT_MILLIS: u64 = 1_000;
+
+/// Whether a finished visit lasted long enough to be counted.
+///
+/// Takes the duration [`crate::watch_visit`] measured, which is the time from
+/// the rising edge to the last sample still above the threshold -- so a load
+/// that vanished immediately arrives here as a handful of milliseconds.
+pub const fn counts_as_visit(millis: u64) -> bool {
+    millis >= MIN_COUNTED_VISIT_MILLIS
 }
 
 /// What one load-cell reading means for the presence state machine.
@@ -235,6 +273,31 @@ mod tests {
     use super::*;
 
     const THRESHOLD: i32 = 4200; // 10 g at the default scale factor
+
+    #[test]
+    fn a_touch_shorter_than_a_second_is_not_counted() {
+        // The durations the terrace actually published on 2026-09-12 in the
+        // hour it reported 67 arrivals. The short ones are what this rejects.
+        for millis in [0, 100, 300, 600, 700, 999] {
+            assert!(!counts_as_visit(millis), "{millis} ms counted");
+        }
+    }
+
+    #[test]
+    fn a_visit_of_a_second_or_more_is_counted() {
+        for millis in [1_000, 1_300, 2_100, 3_500, 9_300, 60_000] {
+            assert!(counts_as_visit(millis), "{millis} ms not counted");
+        }
+    }
+
+    #[test]
+    fn nothing_inside_the_settling_window_is_counted() {
+        // Below `VISIT_SETTLE` (400 ms) a visit has no settled samples at all
+        // and its weight is whichever conversion tripped the threshold. A
+        // counted visit must never be one of those.
+        assert!(!counts_as_visit(399));
+        assert!(!counts_as_visit(400));
+    }
 
     #[test]
     fn crossing_the_threshold_from_empty_is_an_arrival() {
@@ -465,13 +528,4 @@ mod tests {
             "{per_hour}/h would flatten the pack in {hours} h"
         );
     }
-
-    #[test]
-    fn a_stuck_load_stops_counting_before_it_costs_a_night() {
-        // Eleven hours is what it cost. Whatever the constant is, it has to be
-        // a small fraction of that.
-        assert!(STUCK_AFTER_SECS <= 3600, "{STUCK_AFTER_SECS} s is not a bound");
-        assert!(STUCK_AFTER_SECS >= 120, "a bird may legitimately linger");
-    }
-
 }

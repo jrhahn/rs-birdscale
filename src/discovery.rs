@@ -399,6 +399,19 @@ const SCALE_CONTROLS: &[Control] = &[
         reads_back: false,
         spec: "\"pl_prs\":\"tare\",",
     },
+    // The visit counter lives in RTC RAM, which is exactly the memory that
+    // cannot be cleared from a distance: a reflash keeps it by design, and this
+    // board has twice been seen holding RTC RAM through several seconds without
+    // power (see `REANNOUNCE_CONTROLS`), so "unplug it" is not a reset either.
+    // Without a button the only reliable way back to zero would be a firmware
+    // change, which is a poor answer to "start counting again from today".
+    Control {
+        component: "button",
+        key: "reset_visits",
+        name: "Zähler zurücksetzen",
+        reads_back: false,
+        spec: "\"pl_prs\":\"reset\",",
+    },
 ];
 
 /// Knobs that only exist on a node carrying an SCD41.
@@ -660,10 +673,15 @@ mod tests {
                 assert_eq!(&topic[prefix.len()..], control.key);
                 // Two values, because one of them may happen to equal the
                 // default and `apply` reports "changed", not "understood".
-                // `reannounce` is the one control that is not a config
-                // value: it forgets the discovery digest, which lives in RTC
-                // RAM, so `main`'s drain handles it rather than `Config`.
-                if control.key == "reannounce" {
+                //
+                // Two controls are not config values at all: `reannounce`
+                // forgets the discovery digest and `reset_visits` zeroes the
+                // visit counter. Both of those live in RTC RAM rather than in
+                // the config blob, so `main`'s drain acts on them and `Config`
+                // has nothing to store. Anything else reaching this list
+                // without `apply` knowing it would be a control that silently
+                // does nothing.
+                if matches!(control.key, "reannounce" | "reset_visits") {
                     continue;
                 }
                 let mut probe = Config::DEFAULT;

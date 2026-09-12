@@ -175,6 +175,10 @@ const CONSOLE_WINDOW_STRANDED: Duration = Duration::from_secs(120);
 const TARE_KEY: &str = "tare";
 /// Config key that forgets the discovery digest; see `REANNOUNCE_CONTROLS`.
 const REANNOUNCE_KEY: &str = "reannounce";
+/// Config key that zeroes the visit counter. Like the two above it is a button
+/// press rather than a setting, so it is consumed rather than stored -- and
+/// unlike them it touches RTC RAM instead of the config blob.
+const RESET_VISITS_KEY: &str = "reset_visits";
 
 /// Give up on a single HX711 conversion after this long. A disconnected sensor
 /// (with `DT` pulled up) never becomes ready, so this bounds the boot.
@@ -494,10 +498,6 @@ async fn run_battery(
                 raw, baseline, delta
             );
             state::set_bird_present(true);
-            // Counted here rather than after the publish: the rate limiter
-            // below drops arrivals that fall inside its 60 s window, and a
-            // second bird in half a minute is still a second bird.
-            state::count_visit();
 
             // Watch the whole visit with the CPU awake instead of deep-sleeping
             // between samples. This is what turns one arbitrary conversion per
@@ -505,6 +505,25 @@ async fn run_battery(
             // active interval into one per visit.
             let visit = watch_visit(board, raw, baseline, &cfg).await;
             state::set_bird_present(visit.still_loaded);
+
+            // Counted here rather than on the rising edge, because the edge
+            // does not yet say whether anything stayed: a bounce and a meal
+            // look identical until the load is watched. See
+            // `presence::MIN_COUNTED_VISIT_MILLIS`.
+            //
+            // Still counted before the rate limiter below, which was the
+            // reason the count used to sit on the edge: the limiter drops
+            // *publishes* inside its 60 s window, and a second bird in half a
+            // minute is still a second bird.
+            if presence::counts_as_visit(visit.millis) {
+                state::count_visit();
+            } else {
+                info!(
+                    "{} ms on the cell is under the {} ms a visit has to last; not counted",
+                    visit.millis,
+                    presence::MIN_COUNTED_VISIT_MILLIS
+                );
+            }
 
             // A fresh arrival starts a new stretch, whatever the last one did.
             state::set_present_rounds(0);
@@ -1300,6 +1319,7 @@ async fn publish_samples(
     let mut reprovision = None;
     let mut tare_pressed = false;
     let mut reannounce_pressed = false;
+    let mut reset_visits_pressed = false;
     let config_prefix = node.config_prefix();
     let provision_topic = node::provision_topic(Efuse::read_base_mac_address());
 
@@ -1345,6 +1365,20 @@ async fn publish_samples(
                             state::set_discovery_tag(0);
                             reannounce_pressed = true;
                         }
+
+                        // Acted on here rather than through `apply`: the count
+                        // is not part of the config blob, so there is nothing
+                        // for `apply` to change and nothing to persist to
+                        // flash. Writing zero through `set_visit_count` also
+                        // rewrites the check word, so the next read trusts it.
+                        if key == RESET_VISITS_KEY && !value.is_empty() {
+                            info!(
+                                "visit counter reset requested; {} -> 0",
+                                state::visit_count()
+                            );
+                            state::set_visit_count(0);
+                            reset_visits_pressed = true;
+                        }
                         if updated.apply(key, value, baseline) {
                             info!("config: {} = {}", key, value);
                         }
@@ -1362,7 +1396,10 @@ async fn publish_samples(
     // thing distinguishing a press from its own echo is whether it is still on
     // the broker: an empty retained payload deletes it. If this fails we simply
     // tare again next time, which on an empty scale lands on the same zero.
-    for (pressed, key) in [(reannounce_pressed, REANNOUNCE_KEY)] {
+    for (pressed, key) in [
+        (reannounce_pressed, REANNOUNCE_KEY),
+        (reset_visits_pressed, RESET_VISITS_KEY),
+    ] {
         if !pressed {
             continue;
         }

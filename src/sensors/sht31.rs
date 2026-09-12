@@ -44,6 +44,15 @@ pub const CMD_READ_STATUS: u16 = 0xF32D;
 /// with a little margin rather than to the exact maximum.
 pub const CONVERSION_MS: u64 = 17;
 
+// The floor the paragraph above argues for, checked where a violation belongs:
+// at compile time. As a test it was an assertion over a constant, which clippy
+// folds to `assert!(true)` and rejects -- and it would only have failed after
+// the image was already built.
+const _: () = assert!(
+    CONVERSION_MS >= 16,
+    "the wait cannot cover a 15.5 ms conversion"
+);
+
 /// Datasheet soft-reset time (ms). 1.5 ms in the datasheet; wait 2.
 pub const RESET_MS: u64 = 2;
 
@@ -279,7 +288,6 @@ mod tests {
     }
 
     #[cfg(feature = "drivers")]
-    #[cfg(feature = "drivers")]
     #[test]
     fn a_soft_reset_is_issued_before_anything_else_is_asked() {
         use super::super::mock::{block_on, FakeI2c};
@@ -297,17 +305,6 @@ mod tests {
             bus.writes(),
             vec![&CMD_SOFT_RESET.to_be_bytes()[..]],
             "the reset command itself, and nothing else"
-        );
-    }
-
-    #[test]
-    fn the_conversion_wait_covers_the_datasheet_maximum() {
-        // 15.5 ms is the datasheet's worst case for high repeatability. The
-        // wait used to be 15, which read early often enough to report a working
-        // sensor as absent.
-        assert!(
-            CONVERSION_MS >= 16,
-            "waiting {CONVERSION_MS} ms cannot cover a 15.5 ms conversion"
         );
     }
 
