@@ -234,6 +234,15 @@ DROP MATERIALIZED VIEW readings_1m;
 catches it up without a full rebuild. `SELECT view_name, view_status,
 refresh_base_table_txn, base_table_txn FROM materialized_views()` is how to tell.
 
+## How long to keep it, and what that costs
+
+Measured rather than guessed, and written up in
+[`docs/long-term-history.md`](../docs/long-term-history.md): the fleet produces
+~25,900 readings a day, a finished daily partition of exactly that shape came to
+**828 KB**, and three years of raw data is therefore under a gigabyte. That page
+also argues why the rollups should outlive the raw table rather than expire with
+it, and what threatens a long series once storage has stopped being the problem.
+
 ## Limits worth knowing
 
 - **Readings are lost if the database is unreachable for a long time.** The
