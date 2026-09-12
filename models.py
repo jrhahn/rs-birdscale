@@ -778,13 +778,12 @@ KL_TOP = KL_FLOOR + KL_IN_H       # 27
 KL_BAF = 2.0
 KL_SENS_X = 22.0                  # sensor chamber depth
 KL_POST = 8.0
-# 4 mm for a heat-set M3 insert, which is the hole the common brass ones ask
-# for (4.6 mm outer, going into 4.0). That leaves 2.0 mm of post wall -- the
-# thinnest of the three boxes, because KL_POST cannot grow: KL_POST_XY is
-# derived from it, so a wider post would move the screws and the already
-# printed lid would no longer line up. Brass expands as it goes in, so check it
-# against the insert you actually have before printing.
-KL_PILOT = 4.0
+# 3.5 mm for a heat-set M3 insert, matching WZ_PILOT rather than the 4.0 this
+# briefly had: the brass displaces plastic as it melts in, so the hole wants to
+# be under the insert's outer diameter, not equal to it. That also puts 2.25 mm
+# of post wall back around it instead of 2.0, which matters here because
+# KL_POST cannot grow -- the screw centres are pinned by KL_POST_XY.
+KL_PILOT = 3.5
 # Measured, not derived -- the same reason BOSS_XY is pinned on the terrace box.
 # Flush against the inner walls the centres come out at (26.0, 13.0), and a test
 # fit of the printed pair showed the lid would not sit down: the holes had to
