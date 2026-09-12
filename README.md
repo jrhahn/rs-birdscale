@@ -456,6 +456,31 @@ On a blank flash the firmware falls back to built-in defaults
 3. `scale_factor = (raw_loaded − offset) / m`; enter it in the *Kalibrierfaktor*
    number. Re-check and adjust until the reading matches.
 
+## Long-term history
+
+Home Assistant sees every node the moment it publishes, and keeps a recorder
+database — tuned for weeks. The questions this fleet was built for are slower
+than that: did insulating the roof change the bedroom's overnight CO₂, how does
+the terrace swing between summers, is the feeder busier this year than last.
+
+[`timeseries/`](timeseries/README.md) is a second consumer on the same broker
+whose only job is not to lose anything. It follows the topics the nodes already
+publish, writes each reading into **QuestDB** with a **three-year retention**,
+maintains three cascading rollup views (`_1m` → `_1h` → `_1d`) so a year-wide
+chart reads thousands of rows instead of millions, and serves a small dashboard
+that routes each query to the coarsest view still fine enough to answer it.
+
+```bash
+nix develop .#timeseries
+cd timeseries && cargo run -- timeseries.example.toml   # then http://127.0.0.1:8087
+```
+
+It changes nothing about the firmware or the Home Assistant side — a node does
+not know it is being archived. The flake carries a package and a NixOS module
+(which brings up QuestDB too, since nixpkgs ships the package but no service)
+for the home server; see [`timeseries/README.md`](timeseries/README.md) for the
+schema, the rollup reasoning, and how to deploy it.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

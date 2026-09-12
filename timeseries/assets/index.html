@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smarthome — Verlauf</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Smarthome — Verlauf</h1>
+      <div id="health" class="health" title="Status von Broker und Datenbank">…</div>
+    </header>
+
+    <main>
+      <nav id="sidebar" aria-label="Kanäle">
+        <p class="hint">Lade Kanäle …</p>
+      </nav>
+
+      <section id="detail">
+        <div class="chart-head">
+          <div>
+            <h2 id="chart-title">Kein Kanal gewählt</h2>
+            <p id="chart-sub" class="sub"></p>
+          </div>
+          <div id="ranges" class="ranges"></div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+          <div id="tooltip" class="tooltip" hidden></div>
+        </div>
+        <p id="chart-foot" class="foot"></p>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

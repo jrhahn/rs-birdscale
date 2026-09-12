@@ -1,0 +1,60 @@
+# Every value here is the default, so an empty file behaves identically to
+# this one. Copy it only to change something.
+#
+# Pass the file as the first argument, or point $SMARTHOME_TIMESERIES_CONFIG at
+# it:
+#
+#   smarthome-timeseries /etc/smarthome-timeseries.toml
+
+[mqtt]
+host = "127.0.0.1"
+port = 1883
+user = ""
+password = ""
+# Read the password from a file instead, so it never sits in this one (or, on
+# NixOS, in the world-readable store). systemd's LoadCredential= puts it under
+# /run/credentials/<unit>/.
+# password_file = "/run/credentials/smarthome-timeseries.service/mqtt-password"
+
+# Must be unique on the broker: two clients with the same id take turns
+# kicking each other off.
+client_id = "smarthome-timeseries"
+
+# The fleet's topic root -- `node.namespace` in the firmware.
+namespace = "smarthome"
+
+# Where Home Assistant's retained discovery messages live. Read, never written:
+# it is where the dashboard's units and display names come from.
+discovery_prefix = "homeassistant"
+
+[questdb]
+url = "http://127.0.0.1:9000"
+user = ""
+password = ""
+# password_file = "/run/credentials/smarthome-timeseries.service/questdb-password"
+
+table = "readings"
+status_table = "node_status"
+
+# How long readings are kept. QuestDB expires data a whole partition at a time,
+# so this must be a whole number of days or coarser: H(OURS), D(AYS), W(EEKS),
+# M(ONTHS), Y(EARS). An empty value keeps everything for ever.
+retention = "3y"
+
+# Create and maintain the rollup views (readings_1m / _1h / _1d). Turning this
+# off leaves every chart reading the base table: same numbers, slower once the
+# history is years deep.
+rollups = true
+
+# How often buffered readings are committed. This is the knob that sets
+# steady-state database load, because every commit refreshes the rollups.
+flush_interval_secs = 5
+
+# Commit early when this many readings are buffered, so a reconnecting fleet
+# does not sit in memory for a whole interval.
+batch_max = 1000
+
+[web]
+# Loopback: the dashboard has no authentication of its own. Put it behind the
+# same reverse proxy as Home Assistant to reach it from elsewhere.
+bind = "127.0.0.1:8087"

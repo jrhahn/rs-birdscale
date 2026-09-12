@@ -1,0 +1,158 @@
+/* One stylesheet, no framework. The page has a header, a list and a chart;
+   anything more would be more build than dashboard. */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #1c2024;
+  --muted: #6b7480;
+  --line: #dfe3e8;
+  --accent: #2f6f9f;
+  --band: rgba(47, 111, 159, 0.18);
+  --ok: #2e7d4f;
+  --bad: #b3261e;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181c;
+    --panel: #1b2026;
+    --ink: #e6e9ec;
+    --muted: #94a0ad;
+    --line: #2b333c;
+    --accent: #6fb3e0;
+    --band: rgba(111, 179, 224, 0.22);
+    --ok: #67c08a;
+    --bad: #f2837c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.2rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
+h2 { font-size: 1.15rem; margin: 0; font-weight: 600; }
+
+.health { font-size: 0.82rem; color: var(--muted); display: flex; gap: 0.9rem; }
+
+/* Not scoped to .health: the same dot marks a node's availability in the
+   sidebar, where an unsized span would simply be invisible. */
+.dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; margin-right: 0.35rem; vertical-align: baseline; }
+.dot.up { background: var(--ok); }
+.dot.down { background: var(--bad); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 1rem;
+  padding: 1rem 1.2rem 2rem;
+  align-items: start;
+}
+
+@media (max-width: 820px) {
+  main { grid-template-columns: 1fr; }
+}
+
+nav {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+}
+
+.node-name {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 0.7rem 0.6rem 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+button.channel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+button.channel:hover { background: var(--bg); }
+button.channel[aria-current="true"] { background: var(--accent); color: #fff; }
+button.channel[aria-current="true"] .value { color: #fff; }
+
+.channel .value { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.channel .stale { opacity: 0.5; }
+
+section#detail {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.2rem;
+  min-height: 22rem;
+}
+
+.chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.sub { color: var(--muted); margin: 0.2rem 0 0; font-size: 0.85rem; }
+.foot { color: var(--muted); font-size: 0.78rem; margin: 0.7rem 0 0; }
+.hint { color: var(--muted); padding: 0.8rem; margin: 0; font-size: 0.88rem; }
+
+.ranges { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ranges button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.ranges button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.chart-wrap { position: relative; margin-top: 0.9rem; }
+canvas { width: 100%; height: 340px; display: block; }
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+
+.error { color: var(--bad); }

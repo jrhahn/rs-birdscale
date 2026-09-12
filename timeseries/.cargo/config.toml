@@ -1,0 +1,12 @@
+# The firmware's `../.cargo/config.toml` defaults every cargo invocation in this
+# tree to `riscv32imc-unknown-none-elf`, and cargo merges config files all the
+# way up the directory tree. This crate is a host service, so it has to undo
+# that -- and cargo has no "unset", only an override, which is why a concrete
+# triple is spelled out here rather than nothing at all.
+#
+# On a host that is not x86_64 Linux -- a Raspberry Pi home server, say --
+# override it: `cargo build --target aarch64-unknown-linux-gnu`, or set
+# `CARGO_BUILD_TARGET`. Both take precedence over this file, and the Nix package
+# sets the environment variable from the host platform for exactly that reason.
+[build]
+target = "x86_64-unknown-linux-gnu"

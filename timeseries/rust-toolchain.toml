@@ -1,0 +1,14 @@
+# Deliberately *not* the firmware's toolchain. `../rust-toolchain.toml` pins
+# 1.83.0 because esp-wifi 0.11's pre-generated C bindings break on anything
+# newer -- a constraint that belongs to the ESP32-C3 image and to nothing else.
+# This crate runs on the home server, shares no dependency with the firmware,
+# and its dependency tree (tokio, axum, rumqttc and their transitive crates)
+# already asks for 1.85 or later.
+#
+# `stable` rather than a number: nothing here rides a language feature worth
+# pinning for, and the build that actually ships is the Nix package, which uses
+# nixpkgs' rustc and is pinned by flake.lock. This file only decides which
+# toolchain a `cargo build` in this directory picks up.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

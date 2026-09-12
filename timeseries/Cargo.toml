@@ -1,0 +1,23 @@
+[package]
+name = "smarthome-timeseries"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jürgen Hahn"]
+description = "MQTT -> QuestDB archiver and dashboard for the smart-home sensor fleet"
+license = "MIT"
+
+[[bin]]
+name = "smarthome-timeseries"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+axum = "0.8.9"
+reqwest = { version = "0.13.3", default-features = false, features = ["json"] }
+rumqttc = "0.25.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+toml = "1.0.7"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

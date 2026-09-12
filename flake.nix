@@ -20,7 +20,13 @@
   };
 
   outputs = { self, nixpkgs, nixpkgs-espflash, fenix, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+    # `nixosModules` is not per-system, so it sits outside `eachDefaultSystem`
+    # -- the home server imports it and picks its own `pkgs`.
+    {
+      nixosModules.smarthome-timeseries = import ./timeseries/nix/module.nix;
+      nixosModules.default = self.nixosModules.smarthome-timeseries;
+    }
+    // flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         pkgsEspflash = import nixpkgs-espflash { inherit system; };
@@ -54,6 +60,11 @@
         cadVenv = ".venv-cad";
       in
       {
+        # The host-side archiver. Not built by the firmware shell: it shares no
+        # dependency with the image and does not even use the same toolchain.
+        packages.smarthome-timeseries = pkgs.callPackage ./timeseries/nix/package.nix { };
+        packages.default = self.packages.${system}.smarthome-timeseries;
+
         devShells.default = pkgs.mkShell {
           packages = [
             rustToolchain
@@ -64,6 +75,33 @@
           # Route git at the tracked hooks so the gitleaks secret scan runs on
           # every commit made from inside the dev shell. `core.hooksPath` is a
           # local setting, so this (re)applies it on shell entry.
+          shellHook = ''
+            if [ -d .git ]; then
+              git config --local core.hooksPath .githooks
+            fi
+          '';
+        };
+
+        # The archiver's own shell. The firmware's 1.83.0 pin exists for
+        # esp-wifi's C bindings and is older than what tokio, axum and rumqttc
+        # ask for, so this one takes nixpkgs' rustc instead -- see
+        # `timeseries/rust-toolchain.toml`.
+        #
+        #   nix develop .#timeseries
+        #   cd timeseries && cargo test
+        devShells.timeseries = pkgs.mkShell {
+          packages = [
+            pkgs.cargo
+            pkgs.rustc
+            pkgs.clippy
+            pkgs.rustfmt
+            pkgs.rust-analyzer
+            pkgs.gitleaks
+            # For the end-to-end smoke test in timeseries/README.md.
+            pkgs.questdb
+            pkgs.mosquitto
+          ];
+
           shellHook = ''
             if [ -d .git ]; then
               git config --local core.hooksPath .githooks
