@@ -115,11 +115,51 @@ wired into a scale. There is no need for them.
 The reason a single `espflash flash` fails is not that the node is unreachable;
 it is that it is only reachable *briefly*. It deep-sleeps about two seconds
 after boot and its USB port goes with it, so one invocation started at the
-wrong moment finds nothing. But **every wake re-enumerates the port**, so only
-one attempt has to land inside a window — and `espflash`'s own pre-connect
-reset drops the chip into the ROM bootloader, where it then waits patiently.
+wrong moment finds nothing.
 
-So poll fast, fire the moment a port appears, and retry until one syncs:
+**Waking up is not enough, and this is the part that wasted half an hour on
+2026-09-12.** The USB controller does come back on every wake and does start to
+enumerate — but an idle round is awake for milliseconds, far less than a host
+needs to read a device descriptor. What that looks like from the host is a
+device that appears and fails, about every two seconds, forever:
+
+```
+usb 6-1: new full-speed USB device number 18 using xhci_hcd
+usb 6-1: device descriptor read/all, error -71
+usb 6-1: new full-speed USB device number 20 using xhci_hcd
+usb 6-1: device descriptor read/all, error -71
+```
+
+Seventy-six such attempts in three minutes, and **no `/dev/ttyACM*` is ever
+created**, so a poll loop has nothing to fire at. Check `journalctl -k` before
+concluding the node is dead: the `-71` storm means it is alive and sleeping.
+
+So the node has to be made to stay awake first, and it has a switch for exactly
+that. Publish it retained, because the node is asleep when you send it:
+
+```bash
+mosquitto_pub -h "$BROKER" -u "$MQTT_USER" -P "$MQTT_PASSWORD" \
+  -t smarthome/terrasse/config/deep_sleep -m 0 -r -q 1
+```
+
+It is picked up on the node's next publish round — up to `heartbeat_interval`
+away, ten minutes by default — and from then on the port enumerates properly
+and stays. Then flash normally, and **put it back afterwards**:
+
+```bash
+espflash flash --port /dev/ttyACM0 "$ELF"
+mosquitto_pub ... -t smarthome/terrasse/config/deep_sleep -m 1 -r -q 1
+```
+
+Watch for `config: deep_sleep = 1` / `deep sleep re-enabled — sleeping` on the
+monitor to confirm it took. A battery node left awake is not a small mistake:
+it draws about 28 mAh an hour against the ~3.3 mA that makes the cell last
+weeks.
+
+The poll loop below is still worth having, but for a narrower case: the node is
+awake for several seconds during a publish round, and that window *is* long
+enough to enumerate. It is the tool for catching a node that publishes often,
+or for firing the instant someone holds `B` (BOOT) while plugging the cable in.
 
 ```bash
 ELF=target/riscv32imc-unknown-none-elf/release/rs-smarthome-nodes
@@ -131,17 +171,25 @@ done
 ```
 
 Start it *before* plugging the node in. The 20 ms poll matters: at 200 ms most
-of the wake window is gone before the first attempt. Expect several failed
-attempts in the output — that is the loop working, not a fault.
+of the window is gone before the first attempt.
 
 `--port` is required, not optional: without it `espflash` asks which port to
 use, and a non-interactive shell gets `IO error: not a terminal` rather than a
 prompt.
 
-One thing the loop cannot do for you: **a reflash does not clear RTC RAM.** The
-tare baseline, the presence flag and the discovery digest all survive it (see
+Whichever route you take: **a reflash does not clear RTC RAM.** The tare
+baseline, the presence flag and the discovery digest all survive it (see
 [`src/state.rs`](src/state.rs)). If the point of the reflash was to clear a bad
 baseline, pull the power afterwards and leave the beam alone for that boot.
+
+The same fact has a sharper edge for *new* firmware. A
+`#[ram(rtc_fast, persistent)]` word is never zeroed by the startup code, so one
+that has just been added comes up holding whatever was in that slot — and
+because the reflash preserved RTC RAM, the first boot on the new firmware is
+**not** a cold boot, so a cold-boot check does not save you. The visit counter
+came up at 2,345,324,652 that way on 2026-09-12. Guard such a word with a
+checked pair rather than with a boot-time branch; `scale::VISITS_MAGIC` is the
+worked example.
 
 ### Do not use `espflash monitor` to check *whether* an app is running
 
